@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "1043471756231",
+    "project_id": "cambiazo-app-35514",
+    "storage_bucket": "cambiazo-app-35514.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1043471756231:android:231b9308a3e98b6b9287e2",
+        "android_client_info": {
+          "package_name": "com.example.cambiazoapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1043471756231-f0im52v3e5eee4isnm23qqg8c0vo3phc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.cambiazoapp",
+            "certificate_hash": "02bf66a97f0ee8385a56def721e7297b56e5a721"
+          }
+        },
+        {
+          "client_id": "1043471756231-4ra07gafsqm8oknaeenti6dgksfhh4qe.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCuGQ0ynqWkLX7SOzO0CRSGlCzzW_w0Y5E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1043471756231-4ra07gafsqm8oknaeenti6dgksfhh4qe.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
