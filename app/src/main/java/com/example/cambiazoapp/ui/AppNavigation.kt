@@ -1,30 +1,17 @@
 package com.example.cambiazoapp.ui
 
 import androidx.compose.runtime.Composable
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.example.cambiazoapp.ui.screens.DetalleProductoScreen
+import com.example.cambiazoapp.ui.screens.HomeScreen
 import com.example.cambiazoapp.ui.screens.LoginScreen
-import com.example.cambiazoapp.ui.screens.RegistroScreen
-import com.example.cambiazoapp.ui.screens.PublicarProductoScreen
-
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.ui.Alignment
-//import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-
 import com.example.cambiazoapp.ui.screens.MiInventarioScreen
-
-//import androidx.compose.material3.Button
-//import androidx.compose.material3.Text
-
-//import androidx.compose.foundation.layout.Spacer
-
+import com.example.cambiazoapp.ui.screens.PublicarProductoScreen
+import com.example.cambiazoapp.ui.screens.RegistroScreen
 
 @Composable
 fun AppNavigation() {
@@ -50,17 +37,6 @@ fun AppNavigation() {
                 }
             )
         }
-        //agrega la ruta publicar
-        composable("publicar") {
-            PublicarProductoScreen(
-                onProductoPublicado = {
-                    navController.popBackStack()
-                }
-            )
-        }
-        composable("inventario") {
-            MiInventarioScreen()
-        }
 
         composable("registro") {
             RegistroScreen(
@@ -77,58 +53,54 @@ fun AppNavigation() {
             )
         }
 
+        // Pantalla 3: Feed Principal / Catálogo (RF-07, RF-08, RF-09)
         composable("inicio") {
-            TextoInicio(
+            HomeScreen(
                 onIrAPublicar = {
                     navController.navigate("publicar")
                 },
                 onIrAInventario = {
                     navController.navigate("inventario")
+                },
+                onIrAActividad = {
+                    // En la Fase 4 conectaremos aquí la pantalla de Propuestas/Trueques (RF-17)
+                    navController.navigate("inventario")
+                },
+                onIrADetalleProducto = { productoId ->
+                    navController.navigate("detalle/$productoId")
                 }
             )
         }
-    }
-}
 
-@Composable
-fun TextoInicio(
-    onIrAPublicar: () -> Unit,
-    onIrAInventario: () -> Unit
-) {
-    androidx.compose.foundation.layout.Column(
-        modifier = androidx.compose.ui.Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
-        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
-    ) {
-
-        androidx.compose.material3.Text(
-            text = "Bienvenido a Cambiazo"
-        )
-
-        androidx.compose.foundation.layout.Spacer(
-            modifier = androidx.compose.ui.Modifier.height(20.dp)
-        )
-
-        androidx.compose.material3.Button(
-            onClick = onIrAPublicar
-        ) {
-            androidx.compose.material3.Text(
-                text = "Publicar artículo"
+        // Pantalla 4: Detalle del Artículo con Galería de Imágenes (RF-10, RF-11, RF-12)
+        composable(
+            route = "detalle/{productoId}",
+            arguments = listOf(navArgument("productoId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val productoId = backStackEntry.arguments?.getString("productoId") ?: ""
+            DetalleProductoScreen(
+                productoId = productoId,
+                onVolver = {
+                    navController.popBackStack()
+                },
+                onProponerTrueque = { idSolicitado ->
+                    // En la Fase 4 abriremos aquí el Modal de Propuesta de Trueque (RF-13)
+                }
             )
         }
 
-        androidx.compose.foundation.layout.Spacer(
-            modifier = androidx.compose.ui.Modifier.height(12.dp)
-        )
-
-        androidx.compose.material3.Button(
-            onClick = onIrAInventario
-        ) {
-            androidx.compose.material3.Text(
-                text = "Mi inventario"
+        // Pantalla 7: Publicar Nuevo Artículo (RF-19, RF-20, RF-21)
+        composable("publicar") {
+            PublicarProductoScreen(
+                onProductoPublicado = {
+                    navController.popBackStack()
+                }
             )
+        }
+
+        // Pantalla 8: Mi Inventario / Perfil (RF-22)
+        composable("inventario") {
+            MiInventarioScreen()
         }
     }
 }

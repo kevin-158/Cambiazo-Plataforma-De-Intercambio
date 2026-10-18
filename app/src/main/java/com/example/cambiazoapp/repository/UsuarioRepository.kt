@@ -1,18 +1,14 @@
-/*package com.example.cambiazoapp.repository
-
-class UsuarioRepository {
-}
-00
- */
 package com.example.cambiazoapp.repository
 
-import com.google.firebase.auth.FirebaseAuth
-import kotlinx.coroutines.tasks.await
-import com.google.firebase.firestore.FirebaseFirestore
 import android.content.Context
+import com.example.cambiazoapp.model.Usuario
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.tasks.await
 
 class UsuarioRepository(
     private val context: Context
@@ -22,7 +18,6 @@ class UsuarioRepository(
     private val db = FirebaseFirestore.getInstance()
 
     fun obtenerGoogleSignInClient(): GoogleSignInClient {
-
         val opciones = GoogleSignInOptions.Builder(
             GoogleSignInOptions.DEFAULT_SIGN_IN
         )
@@ -37,39 +32,26 @@ class UsuarioRepository(
         return GoogleSignIn.getClient(context, opciones)
     }
 
-    suspend fun iniciarSesionConGoogle(
-        idToken: String
-    ): Result<String> {
-
+    suspend fun iniciarSesionConGoogle(idToken: String): Result<String> {
         return try {
+            val credential = GoogleAuthProvider.getCredential(idToken, null)
+            val resultado = auth.signInWithCredential(credential).await()
+            val user = resultado.user
+            val uid = user?.uid ?: ""
 
-            val credential = com.google.firebase.auth.GoogleAuthProvider
-                .getCredential(idToken, null)
-
-            val resultado = auth
-                .signInWithCredential(credential)
-                .await()
-
-            val uid = resultado.user?.uid ?: ""
-
-            Result.success(uid)
-
-        } catch (e: Exception) {
-
-            Result.failure(e)
-        }
-    }
-
-    suspend fun registrarUsuario(
-        correo: String,
-        contraseña: String
-    ): Result<String> {
-        return try {
-            val resultado = auth
-                .createUserWithEmailAndPassword(correo, contraseña)
-                .await()
-
-            val uid = resultado.user?.uid ?: ""
+            // Validación: si entra con Google por primera vez, asegurar su documento en Firestore
+            if (uid.isNotEmpty()) {
+                val doc = db.collection("usuarios").document(uid).get().await()
+                if (!doc.exists()) {
+                    guardarUsuario(
+                        uid = uid,
+                        nombre = user?.displayName ?: "Usuario Cambiazo",
+                        correo = user?.email ?: "",
+                        ciudad = "Cajamarca",
+                        barrio = "Centro"
+                    )
+                }
+            }
 
             Result.success(uid)
         } catch (e: Exception) {
@@ -77,23 +59,26 @@ class UsuarioRepository(
         }
     }
 
-    suspend fun iniciarSesion(
-        correo: String,
-        contraseña: String
-    ): Result<String> {
+    suspend fun registrarUsuario(correo: String, contraseña: String): Result<String> {
         return try {
-            val resultado = auth
-                .signInWithEmailAndPassword(correo, contraseña)
-                .await()
-
+            val resultado = auth.createUserWithEmailAndPassword(correo, contraseña).await()
             val uid = resultado.user?.uid ?: ""
-
             Result.success(uid)
         } catch (e: Exception) {
             Result.failure(e)
         }
-
     }
+
+    suspend fun iniciarSesion(correo: String, contraseña: String): Result<String> {
+        return try {
+            val resultado = auth.signInWithEmailAndPassword(correo, contraseña).await()
+            val uid = resultado.user?.uid ?: ""
+            Result.success(uid)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun guardarUsuario(
         uid: String,
         nombre: String,
@@ -102,7 +87,6 @@ class UsuarioRepository(
         barrio: String
     ): Result<Boolean> {
         return try {
-
             val datosUsuario = hashMapOf(
                 "uid" to uid,
                 "nombre" to nombre,
@@ -117,24 +101,51 @@ class UsuarioRepository(
                 .await()
 
             Result.success(true)
-
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
-    suspend fun recuperarContraseña(
-        correo: String
-    ): Result<Boolean> {
+
+    // Obtener datos de cualquier usuario (para saludo en Home y datos del dueño en Detalle RF-10/RF-11)
+    suspend fun obtenerUsuarioPorId(uid: String): Result<Usuario> {
         return try {
-
-            auth.sendPasswordResetEmail(correo).await()
-
-            Result.success(true)
-
+            if (uid.isBlank()) {
+                return Result.failure(Exception("ID de usuario vacío"))
+            }
+            val doc = db.collection("usuarios").document(uid).get().await()
+            if (doc.exists()) {
+                Result.success(
+                    Usuario(
+                        uid = doc.getString("uid") ?: uid,
+                        nombre = doc.getString("nombre")?.takeIf { it.isNotBlank() } ?: "Usuario Cambiazo",
+                        correo = doc.getString("correo") ?: "",
+                        ciudad = doc.getString("ciudad")?.takeIf { it.isNotBlank() } ?: "Cajamarca",
+                        barrio = doc.getString("barrio") ?: ""
+                    )
+                )
+            } else {
+                Result.success(
+                    Usuario(
+                        uid = uid,
+                        nombre = "Usuario Cambiazo",
+                        ciudad = "Cajamarca"
+                    )
+                )
+            }
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
+
+    suspend fun recuperarContraseña(correo: String): Result<Boolean> {
+        return try {
+            auth.sendPasswordResetEmail(correo).await()
+            Result.success(true)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     fun cerrarSesion() {
         auth.signOut()
     }
