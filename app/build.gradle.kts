@@ -51,6 +51,8 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation("com.google.firebase:firebase-storage") // Almacenamiento de fotos reales (RF-19)
+    implementation("io.coil-kt:coil-compose:2.7.0")        // Carga de imágenes en Compose (RF-07, RF-10)
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7") //viewModel() desde Jetpack Compose
     implementation("androidx.navigation:navigation-compose:2.8.9")//
     implementation("androidx.compose.material:material-icons-extended")//Usaremos los íconos de Material
