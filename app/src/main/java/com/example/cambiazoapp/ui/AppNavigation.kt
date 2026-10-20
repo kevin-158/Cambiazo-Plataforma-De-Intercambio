@@ -119,7 +119,19 @@ fun AppNavigation() {
 
         // Pantalla 8: Mi Inventario / Gestion de articulos propios (RF-22)
         composable("inventario") {
-            MiInventarioScreen()
+            MiInventarioScreen(
+                onIrAHome = {
+                    navController.navigate("inicio") {
+                        popUpTo("inicio") { inclusive = true }
+                    }
+                },
+                onIrAPublicar = {
+                    navController.navigate("publicar")
+                },
+                onIrAActividad = {
+                    navController.navigate("intercambios")
+                }
+            )
         }
     }
 }
