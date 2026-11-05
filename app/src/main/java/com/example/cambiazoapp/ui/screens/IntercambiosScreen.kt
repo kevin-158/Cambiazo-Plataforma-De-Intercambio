@@ -522,6 +522,7 @@ fun TarjetaEstadoPropuesta(
                         }
                     } else {
                         // El solicitante ve que esta esperando respuesta del dueño
+                        //Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = "Esperando a que el propietario acepte o rechace tu propuesta.",
                             fontSize = 12.sp,
@@ -529,6 +530,21 @@ fun TarjetaEstadoPropuesta(
                             textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth()
                         )
+
+
+
+                        /*
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedButton(
+                            onClick = onRechazar, // Reutiliza el cambio de estado para cancelarla/rechazarla
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, ErrorRed),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = ErrorRed),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Cancelar mi propuesta", fontWeight = FontWeight.Bold)
+                        }
+                         */
                     }
                 }
 

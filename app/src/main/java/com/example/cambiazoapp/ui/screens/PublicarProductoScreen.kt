@@ -781,6 +781,38 @@ fun PublicarProductoScreen(
                         fontWeight = FontWeight.Bold
                     )
                 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                /*
+                // Validacion extra: Titulo minimo de 5 caracteres
+                if(nombre.trim().length <5){
+                    errorValidacion="El titulo es muy corto(minimo 5 caracteres)"
+                    return@Button
+                }
+
+                // Validacion extra: Descripcion minima de 15 caracteres
+                if(descripcion.trim().length < 15){
+                    errorValidacion = "La Descripcion debe ser detallada mejor el artículo (mínimo 15 caracteres)"
+                    return@Button
+                }
+
+                 */
             }
 
             Spacer(modifier = Modifier.height(16.dp))

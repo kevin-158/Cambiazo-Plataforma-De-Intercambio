@@ -448,6 +448,13 @@ fun DetalleProductoScreen(
                                     color = DeepGreenBrand,
                                     textAlign = TextAlign.Center
                                 )
+                                /*
+                                if(nombre.trim().length <5){
+                                    errorValidacion = "El título es muy corto (mínimo 5 caracteres)."
+                                    return@Button
+                                }
+
+                                 */
                             }
                         }
                     }
@@ -581,6 +588,12 @@ fun DetalleProductoScreen(
                             fontWeight = FontWeight.Bold
                         )
                     }
+                    /*
+                    if (mensajePropuesta.trim().length >10){
+                        errorModal = "Escribe"
+                        return@Button
+                    }
+                     */
                 }
 
                 Spacer(modifier = Modifier.height(18.dp))
@@ -838,12 +851,21 @@ fun DetalleProductoScreen(
                                 .border(2.dp, EmeraldPrimary, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = nombreDueno.take(1).uppercase(),
-                                fontSize = 22.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = DeepGreenBrand
-                            )
+                            if (!propietario?.fotoUrl.isNullOrBlank()) {
+                                CambiazoImagen(
+                                    imagenData = propietario?.fotoUrl,
+                                    contentDescription = nombreDueno,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Text(
+                                    text = nombreDueno.take(1).uppercase(),
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = DeepGreenBrand
+                                )
+                            }
                         }
 
                         Spacer(modifier = Modifier.width(14.dp))

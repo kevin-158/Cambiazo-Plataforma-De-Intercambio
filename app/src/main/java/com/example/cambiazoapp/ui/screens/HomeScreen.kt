@@ -972,7 +972,7 @@ fun TarjetaProductoCatalogo(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Box(
+                    /*Box(
                         modifier = Modifier
                             .size(24.dp)
                             .clip(CircleShape)
@@ -985,6 +985,31 @@ fun TarjetaProductoCatalogo(
                             fontWeight = FontWeight.Bold,
                             color = DeepGreenBrand
                         )
+                    }
+
+                     */
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(LightGreenTint),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (!dueno?.fotoUrl.isNullOrBlank()) {
+                            CambiazoImagen(
+                                imagenData = dueno?.fotoUrl,
+                                contentDescription = nombreCortoDueno,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Text(
+                                text = nombreCortoDueno.take(1).uppercase(),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = DeepGreenBrand
+                            )
+                        }
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
