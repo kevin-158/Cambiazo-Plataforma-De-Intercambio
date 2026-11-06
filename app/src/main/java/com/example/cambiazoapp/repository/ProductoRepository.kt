@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Base64
 import com.example.cambiazoapp.model.Producto
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.Dispatchers
@@ -19,7 +20,7 @@ class ProductoRepository {
     private val db = FirebaseFirestore.getInstance()
     private val storage = FirebaseStorage.getInstance()
 
-    private fun mapearDocumentoAProducto(documento: com.google.firebase.firestore.DocumentSnapshot): Producto {
+    private fun mapearDocumentoAProducto(documento: DocumentSnapshot): Producto {
         val imagenPortada = documento.getString("imagenUrl") ?: ""
         val listaImagenes = (documento.get("imagenes") as? List<*>)
             ?.mapNotNull { it as? String }
@@ -36,25 +37,25 @@ class ProductoRepository {
             imagenUrl = imagenPortada.ifEmpty { listaImagenes.firstOrNull() ?: "" },
             imagenes = listaImagenes,
             interesesCambio = documento.getString("interesesCambio") ?: "",
-            activo = documento.getBoolean("activo") ?: true
+            activo = documento.getBoolean("activo") ?: true,
+            latitud = documento.getDouble("latitud") ?: -7.1617,
+            longitud = documento.getDouble("longitud") ?: -78.5128,
+            direccionReferencia = documento.getString("direccionReferencia") ?: "Cajamarca Centro"
         )
     }
 
-    // Sube una imagen real del teléfono: intenta Firebase Storage y si no está activo usa compresión directa
     suspend fun procesarYSubirImagen(context: Context, uri: Uri): Result<String> = withContext(Dispatchers.IO) {
         try {
             val bytesComprimidos = comprimirImagenDesdeUri(context, uri)
                 ?: return@withContext Result.failure(Exception("No se pudo leer la imagen"))
 
             try {
-                // Intento 1: Subir a Firebase Storage
                 val nombreArchivo = "productos/${UUID.randomUUID()}.jpg"
                 val referencia = storage.reference.child(nombreArchivo)
                 referencia.putBytes(bytesComprimidos).await()
                 val downloadUrl = referencia.downloadUrl.await().toString()
                 Result.success(downloadUrl)
             } catch (_: Exception) {
-                // Intento 2 (Respaldo automático sin tarjeta): Guardar imagen real comprimida como Data URI
                 val base64 = Base64.encodeToString(bytesComprimidos, Base64.NO_WRAP)
                 Result.success("data:image/jpeg;base64,$base64")
             }
@@ -69,7 +70,6 @@ class ProductoRepository {
         inputStream.close()
         if (bitmapOriginal == null) return null
 
-        // Redimensionar a un máximo de 720px para carga rápida y ligera
         val maxDimension = 720
         val ratio = minOf(
             maxDimension.toFloat() / bitmapOriginal.width,
@@ -100,7 +100,6 @@ class ProductoRepository {
         }
     }
 
-    // Para RF-07: Obtener catálogo de artículos de otros usuarios (excluyendo propios y pausados)
     suspend fun obtenerCatalogoDisponible(usuarioActualId: String): Result<List<Producto>> {
         return try {
             val resultado = db
@@ -119,7 +118,6 @@ class ProductoRepository {
         }
     }
 
-    // Para RF-10: Obtener un producto específico por su ID
     suspend fun obtenerProductoPorId(productoId: String): Result<Producto> {
         return try {
             val documento = db.collection("productos").document(productoId).get().await()
@@ -144,7 +142,10 @@ class ProductoRepository {
                 "imagenUrl" to producto.imagenUrl,
                 "imagenes" to producto.imagenes,
                 "interesesCambio" to producto.interesesCambio,
-                "activo" to producto.activo
+                "activo" to producto.activo,
+                "latitud" to producto.latitud,
+                "longitud" to producto.longitud,
+                "direccionReferencia" to producto.direccionReferencia
             )
 
             db.collection("productos")
@@ -168,7 +169,10 @@ class ProductoRepository {
                 "imagenUrl" to producto.imagenUrl,
                 "imagenes" to producto.imagenes,
                 "interesesCambio" to producto.interesesCambio,
-                "activo" to producto.activo
+                "activo" to producto.activo,
+                "latitud" to producto.latitud,
+                "longitud" to producto.longitud,
+                "direccionReferencia" to producto.direccionReferencia
             )
 
             db.collection("productos")

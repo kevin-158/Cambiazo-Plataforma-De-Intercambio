@@ -25,10 +25,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -68,7 +68,6 @@ import com.example.cambiazoapp.ui.theme.DeepGreenBrand
 import com.example.cambiazoapp.ui.theme.EmeraldPrimary
 import com.example.cambiazoapp.ui.theme.ErrorRed
 import com.example.cambiazoapp.ui.theme.InputBackground
-import com.example.cambiazoapp.ui.theme.InputBorder
 import com.example.cambiazoapp.ui.theme.LightGreenTint
 import com.example.cambiazoapp.ui.theme.MutedText
 import com.example.cambiazoapp.ui.theme.OffWhiteBackground
@@ -76,26 +75,19 @@ import com.example.cambiazoapp.ui.theme.PureWhiteSurface
 import com.example.cambiazoapp.viewmodel.IntercambioViewModel
 import com.google.firebase.auth.FirebaseAuth
 
-/**
- * Pantalla de Gestion de Propuestas y Estados de Trueque (Cumple con RF-17).
- * Permite al dueño ver las propuestas recibidas, aceptarlas o rechazarlas,
- * y permite a ambos usuarios ver el estado actualizado (Pendiente, Aceptada, Rechazada, Completada).
- */
 @Composable
 fun IntercambiosScreen(
     onVolver: () -> Unit,
+    onAbrirChatNegociacion: (String) -> Unit = {},
     viewModel: IntercambioViewModel = viewModel()
 ) {
     val usuarioActualId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
-
-    // Pestaña seleccionada: 0 = Propuestas Recibidas, 1 = Propuestas Enviadas
     var tabSeleccionado by remember { mutableIntStateOf(0) }
 
     val propuestasRecibidas by viewModel.propuestasRecibidas.collectAsState()
     val propuestasEnviadas by viewModel.propuestasEnviadas.collectAsState()
     val cargando by viewModel.cargando.collectAsState()
 
-    // Cargar las propuestas al abrir la pantalla
     LaunchedEffect(usuarioActualId) {
         if (usuarioActualId.isNotEmpty()) {
             viewModel.cargarMisIntercambios(usuarioActualId)
@@ -103,6 +95,8 @@ fun IntercambiosScreen(
     }
 
     val listaMostrar = if (tabSeleccionado == 0) propuestasRecibidas else propuestasEnviadas
+    val noLeidosRecibidas = propuestasRecibidas.sumOf { it.noLeidosPropietario }
+    val noLeidosEnviadas = propuestasEnviadas.sumOf { it.noLeidosSolicitante }
 
     Column(
         modifier = Modifier
@@ -111,7 +105,6 @@ fun IntercambiosScreen(
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
-        // Cabecera superior
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -131,20 +124,19 @@ fun IntercambiosScreen(
                 Spacer(modifier = Modifier.width(4.dp))
                 Column {
                     Text(
-                        text = "Actividad de Trueques",
+                        text = "Actividad y Mensajes",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = DarkSlateText
                     )
                     Text(
-                        text = "Estado de propuestas en tiempo real",
+                        text = "Toca una propuesta para abrir el chat y mapa en vivo",
                         fontSize = 12.sp,
                         color = MutedText
                     )
                 }
             }
 
-            // Boton para refrescar el estado de las propuestas
             IconButton(
                 onClick = { viewModel.cargarMisIntercambios(usuarioActualId) }
             ) {
@@ -156,7 +148,6 @@ fun IntercambiosScreen(
             }
         }
 
-        // Pestañas: Recibidas vs Enviadas
         TabRow(
             selectedTabIndex = tabSeleccionado,
             containerColor = PureWhiteSurface,
@@ -173,27 +164,60 @@ fun IntercambiosScreen(
                 selected = tabSeleccionado == 0,
                 onClick = { tabSeleccionado = 0 },
                 text = {
-                    Text(
-                        text = "Recibidas (${propuestasRecibidas.size})",
-                        fontWeight = if (tabSeleccionado == 0) FontWeight.Bold else FontWeight.Medium,
-                        color = if (tabSeleccionado == 0) DeepGreenBrand else MutedText
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Recibidas (${propuestasRecibidas.size})",
+                            fontWeight = if (tabSeleccionado == 0) FontWeight.Bold else FontWeight.Medium,
+                            color = if (tabSeleccionado == 0) DeepGreenBrand else MutedText
+                        )
+                        if (noLeidosRecibidas > 0) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                shape = CircleShape,
+                                color = EmeraldPrimary
+                            ) {
+                                Text(
+                                    text = "$noLeidosRecibidas",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
                 }
             )
             Tab(
                 selected = tabSeleccionado == 1,
                 onClick = { tabSeleccionado = 1 },
                 text = {
-                    Text(
-                        text = "Enviadas (${propuestasEnviadas.size})",
-                        fontWeight = if (tabSeleccionado == 1) FontWeight.Bold else FontWeight.Medium,
-                        color = if (tabSeleccionado == 1) DeepGreenBrand else MutedText
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Enviadas (${propuestasEnviadas.size})",
+                            fontWeight = if (tabSeleccionado == 1) FontWeight.Bold else FontWeight.Medium,
+                            color = if (tabSeleccionado == 1) DeepGreenBrand else MutedText
+                        )
+                        if (noLeidosEnviadas > 0) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                shape = CircleShape,
+                                color = EmeraldPrimary
+                            ) {
+                                Text(
+                                    text = "$noLeidosEnviadas",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
                 }
             )
         }
 
-        // Listado de tarjetas de propuestas con su estado actualizado (RF-17)
         if (cargando) {
             Box(
                 modifier = Modifier
@@ -232,17 +256,6 @@ fun IntercambiosScreen(
                         color = DarkSlateText,
                         textAlign = TextAlign.Center
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = if (tabSeleccionado == 0) {
-                            "Cuando otro usuario se interese en uno de tus artículos publicados, podrás aceptar o rechazar su propuesta aquí."
-                        } else {
-                            "Explora el catálogo en Home, entra al detalle de un artículo que te guste y toca 'Proponer Trueque'."
-                        },
-                        fontSize = 13.sp,
-                        color = MutedText,
-                        textAlign = TextAlign.Center
-                    )
                 }
             }
         } else {
@@ -257,6 +270,7 @@ fun IntercambiosScreen(
                     TarjetaEstadoPropuesta(
                         intercambio = intercambio,
                         esPropuestaRecibida = tabSeleccionado == 0,
+                        onAbrirChat = { onAbrirChatNegociacion(intercambio.id) },
                         onAceptar = {
                             viewModel.cambiarEstadoPropuesta(
                                 intercambioId = intercambio.id,
@@ -270,13 +284,6 @@ fun IntercambiosScreen(
                                 nuevoEstado = "Rechazada",
                                 usuarioActualId = usuarioActualId
                             )
-                        },
-                        onCompletar = {
-                            viewModel.cambiarEstadoPropuesta(
-                                intercambioId = intercambio.id,
-                                nuevoEstado = "Completada",
-                                usuarioActualId = usuarioActualId
-                            )
                         }
                     )
                 }
@@ -285,27 +292,31 @@ fun IntercambiosScreen(
     }
 }
 
-/**
- * Componente que representa la tarjeta fija de estado de la propuesta (Mockup Pantalla 6 / RF-17).
- */
 @Composable
 fun TarjetaEstadoPropuesta(
     intercambio: Intercambio,
     esPropuestaRecibida: Boolean,
+    onAbrirChat: () -> Unit,
     onAceptar: () -> Unit,
-    onRechazar: () -> Unit,
-    onCompletar: () -> Unit
+    onRechazar: () -> Unit
 ) {
-    // Colores dinamicos segun el estado actual de la propuesta (RF-17)
     val (colorBadgeFondo, colorBadgeTexto, textoBadge) = when (intercambio.estado) {
         "Aceptada" -> Triple(EmeraldPrimary, Color.White, "Propuesta Aceptada")
         "Completada" -> Triple(DeepGreenBrand, Color.White, "Intercambio Completado")
-        "Rechazada" -> Triple( Color(0xFFFFDAD6), ErrorRed, "Propuesta Rechazada")
+        "Rechazada" -> Triple(Color(0xFFFFDAD6), ErrorRed, "Propuesta Rechazada")
         else -> Triple(Color(0xFFFFF3CD), Color(0xFF856404), "Propuesta Pendiente")
     }
 
+    val cantidadNoLeidos = if (esPropuestaRecibida) {
+        intercambio.noLeidosPropietario
+    } else {
+        intercambio.noLeidosSolicitante
+    }
+
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onAbrirChat() },
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = PureWhiteSurface),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
@@ -315,7 +326,6 @@ fun TarjetaEstadoPropuesta(
                 .fillMaxWidth()
                 .padding(18.dp)
         ) {
-            // 1. Cabecera: Badge de Estado (Pendiente, Aceptada, Rechazada, Completada) y Usuario
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -334,23 +344,42 @@ fun TarjetaEstadoPropuesta(
                     )
                 }
 
-                val otroUsuario = if (esPropuestaRecibida) {
-                    "De: @${intercambio.usuarioSolicitanteNombre.replace(" ", "")}"
-                } else {
-                    "Para: @${intercambio.usuarioPropietarioNombre.replace(" ", "")}"
-                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // RF-16: Aviso de mensajes nuevos sin leer
+                    if (cantidadNoLeidos > 0) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = EmeraldPrimary
+                        ) {
+                            Text(
+                                text = "$cantidadNoLeidos nuevo(s)",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
+                    }
 
-                Text(
-                    text = otroUsuario,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = DeepGreenBrand
-                )
+                    val otroUsuario = if (esPropuestaRecibida) {
+                        "De: @${intercambio.usuarioSolicitanteNombre.replace(" ", "")}"
+                    } else {
+                        "Para: @${intercambio.usuarioPropietarioNombre.replace(" ", "")}"
+                    }
+
+                    Text(
+                        text = otroUsuario,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = DeepGreenBrand
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // 2. Comparativa visual de los dos articulos involucrados (Mockup Pantalla 6)
+            // Comparativa visual de los dos articulos
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -360,11 +389,10 @@ fun TarjetaEstadoPropuesta(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(14.dp),
+                        .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Articulo Ofrecido
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.weight(1f)
@@ -372,50 +400,46 @@ fun TarjetaEstadoPropuesta(
                         Text(
                             text = if (esPropuestaRecibida) "Te ofrecen" else "Tú ofreces",
                             fontSize = 11.sp,
-                            color = MutedText,
-                            fontWeight = FontWeight.Medium
+                            color = MutedText
                         )
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         CambiazoImagen(
                             imagenData = intercambio.productoOfrecidoImagen,
                             contentDescription = intercambio.productoOfrecidoNombre,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier
-                                .size(76.dp)
-                                .clip(RoundedCornerShape(14.dp))
+                                .size(68.dp)
+                                .clip(RoundedCornerShape(12.dp))
                         )
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = intercambio.productoOfrecidoNombre,
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = DarkSlateText,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            textAlign = TextAlign.Center
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
 
-                    // Icono central de intercambio
                     Surface(
                         shape = CircleShape,
                         color = PureWhiteSurface,
                         shadowElevation = 2.dp,
                         modifier = Modifier
                             .padding(horizontal = 8.dp)
-                            .size(40.dp)
+                            .size(36.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Default.SwapHoriz,
-                                contentDescription = "Intercambio",
+                                contentDescription = null,
                                 tint = EmeraldPrimary,
-                                modifier = Modifier.size(22.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
 
-                    // Articulo Solicitado
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.weight(1f)
@@ -423,196 +447,140 @@ fun TarjetaEstadoPropuesta(
                         Text(
                             text = if (esPropuestaRecibida) "Por tu artículo" else "Solicitas",
                             fontSize = 11.sp,
-                            color = MutedText,
-                            fontWeight = FontWeight.Medium
+                            color = MutedText
                         )
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         CambiazoImagen(
                             imagenData = intercambio.productoSolicitadoImagen,
                             contentDescription = intercambio.productoSolicitadoNombre,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier
-                                .size(76.dp)
-                                .clip(RoundedCornerShape(14.dp))
+                                .size(68.dp)
+                                .clip(RoundedCornerShape(12.dp))
                         )
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = intercambio.productoSolicitadoNombre,
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = DarkSlateText,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            textAlign = TextAlign.Center
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
             }
 
-            // 3. Mensaje adjunto si existe (RF-14)
-            if (intercambio.mensaje.isNotBlank()) {
-                Spacer(modifier = Modifier.height(12.dp))
+            // Ultimo mensaje del chat en tiempo real (RF-16)
+            if (intercambio.ultimoMensaje.isNotBlank()) {
+                Spacer(modifier = Modifier.height(10.dp))
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = InputBackground,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.Top
+                        modifier = Modifier.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.ChatBubbleOutline,
                             contentDescription = null,
-                            tint = MutedText,
+                            tint = DeepGreenBrand,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "\"${intercambio.mensaje}\"",
+                            text = intercambio.ultimoMensaje,
                             fontSize = 13.sp,
-                            color = DarkSlateText
+                            color = DarkSlateText,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // 4. Acciones segun el estado actual y el rol del usuario (RF-17)
-            when (intercambio.estado) {
-                "Pendiente" -> {
-                    if (esPropuestaRecibida) {
-                        // El dueño del articulo puede Aceptar o Rechazar la propuesta recibida
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = onRechazar,
-                                shape = RoundedCornerShape(12.dp),
-                                border = BorderStroke(1.dp, ErrorRed),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = ErrorRed),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Rechazar", fontWeight = FontWeight.Bold)
-                            }
-
-                            Button(
-                                onClick = onAceptar,
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Aceptar Trueque", color = Color.White, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    } else {
-                        // El solicitante ve que esta esperando respuesta del dueño
-                        //Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "Esperando a que el propietario acepte o rechace tu propuesta.",
-                            fontSize = 12.sp,
-                            color = MutedText,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-
-
-                        /*
-                        Spacer(modifier = Modifier.height(10.dp))
-                        OutlinedButton(
-                            onClick = onRechazar, // Reutiliza el cambio de estado para cancelarla/rechazarla
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, ErrorRed),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = ErrorRed),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Cancelar mi propuesta", fontWeight = FontWeight.Bold)
-                        }
-                         */
-                    }
+            // Punto de encuentro si existe (RF-18)
+            if (intercambio.puntoEncuentroNombre.isNotBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.LocationOn,
+                        contentDescription = null,
+                        tint = DeepGreenBrand,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = if (intercambio.puntoEncuentroConfirmado) {
+                            "Punto acordado: ${intercambio.puntoEncuentroNombre}"
+                        } else {
+                            "Punto propuesto: ${intercambio.puntoEncuentroNombre}"
+                        },
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = DeepGreenBrand
+                    )
                 }
+            }
 
-                "Aceptada" -> {
-                    // Sugerencia de seguridad y boton para Confirmar Intercambio Completado (Mockup Pantalla 6)
-                    Surface(
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Botones rapidos de accion + Boton de Abrir Chat y Mapa
+            if (intercambio.estado == "Pendiente" && esPropuestaRecibida) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onRechazar,
                         shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFFEDF4FF),
-                        modifier = Modifier.fillMaxWidth()
+                        border = BorderStroke(1.dp, ErrorRed),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = ErrorRed),
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Row(
-                            modifier = Modifier.padding(10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Shield,
-                                contentDescription = null,
-                                tint = DeepGreenBrand,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Sugerencia de seguridad: Realicen el intercambio en un lugar público con afluencia de personas.",
-                                fontSize = 11.sp,
-                                color = DarkSlateText
-                            )
-                        }
+                        Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Rechazar", fontWeight = FontWeight.Bold)
                     }
-
-                    Spacer(modifier = Modifier.height(12.dp))
 
                     Button(
-                        onClick = onCompletar,
+                        onClick = onAceptar,
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = PureWhiteSurface),
-                        border = BorderStroke(1.5.dp, DarkSlateText),
-                        contentPadding = PaddingValues(vertical = 12.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary),
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Text(
-                            text = "Confirmar Intercambio Completado",
-                            color = DarkSlateText,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
-                        )
+                        Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Aceptar", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
 
-                "Completada" -> {
-                    Text(
-                        text = "✅ ¡Este trueque fue completado exitosamente por ambas partes!",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = DeepGreenBrand,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                "Rechazada" -> {
-                    Text(
-                        text = "Esta propuesta fue rechazada.",
-                        fontSize = 12.sp,
-                        color = ErrorRed,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
+            Button(
+                onClick = onAbrirChat,
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = DeepGreenBrand),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.ChatBubbleOutline,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (intercambio.estado == "Completada") {
+                        "Ver Chat / Calificar Trueque ★"
+                    } else {
+                        "Abrir Chat en Vivo y Mapa 📍"
+                    },
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }

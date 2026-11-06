@@ -106,6 +106,7 @@ fun DetalleProductoScreen(
     onVolver: () -> Unit,
     onIrAPublicarNuevo: () -> Unit,
     onPropuestaEnviadaIrATrueques: () -> Unit,
+    onVerPerfilPublico: (String) -> Unit = {},
     viewModel: ProductoViewModel = viewModel(),
     intercambioViewModel: IntercambioViewModel = viewModel()
 ) {
@@ -827,7 +828,9 @@ fun DetalleProductoScreen(
             ) {
                 // 2. TARJETA DE INFORMACIÓN DEL DUEÑO (RF-10 y RF-11)
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onVerPerfilPublico(prod.usuarioId) },
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = PureWhiteSurface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)

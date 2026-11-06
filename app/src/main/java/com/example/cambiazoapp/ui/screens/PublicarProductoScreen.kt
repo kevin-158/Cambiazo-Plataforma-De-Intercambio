@@ -1,6 +1,10 @@
 package com.example.cambiazoapp.ui.screens
 
+import android.Manifest
+import android.annotation.SuppressLint
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -20,8 +24,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -33,6 +39,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -44,6 +52,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -52,6 +61,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -67,6 +77,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.cambiazoapp.model.Producto
@@ -80,7 +91,9 @@ import com.example.cambiazoapp.ui.theme.LightGreenTint
 import com.example.cambiazoapp.ui.theme.MutedText
 import com.example.cambiazoapp.ui.theme.OffWhiteBackground
 import com.example.cambiazoapp.ui.theme.PureWhiteSurface
+import com.example.cambiazoapp.utils.UbicacionUtils
 import com.example.cambiazoapp.viewmodel.ProductoViewModel
+import com.google.android.gms.location.LocationServices
 import com.google.firebase.auth.FirebaseAuth
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -98,11 +111,18 @@ fun PublicarProductoScreen(
     var categoriaExpandida by remember { mutableStateOf(false) }
     var estado by remember { mutableStateOf("Usado (Buen estado)") }
 
-    // RF-19: Lista de fotos seleccionadas y cuál es el índice de la Portada
+    // RF-09: Ubicacion geolocalizada del articulo para el calculo real de distancia en km
+    val zonasDisponibles = UbicacionUtils.zonasCajamarca
+    var zonaExpandida by remember { mutableStateOf(false) }
+    var direccionReferencia by remember { mutableStateOf(zonasDisponibles.first().nombre) }
+    var latitudArticulo by remember { mutableDoubleStateOf(zonasDisponibles.first().latitud) }
+    var longitudArticulo by remember { mutableDoubleStateOf(zonasDisponibles.first().longitud) }
+
+    // RF-19: Lista de fotos seleccionadas y cual es el indice de la Portada
     val imagenesSeleccionadas = remember { mutableStateListOf<Uri>() }
     var indicePortada by remember { mutableIntStateOf(0) }
 
-    // RF-21: Etiquetas de "¿Qué buscas a cambio?"
+    // RF-21: Etiquetas de "¿Que buscas a cambio?"
     val etiquetasInteres = remember {
         mutableStateListOf("Tecnología", "Abierto a ofertas")
     }
@@ -113,7 +133,33 @@ fun PublicarProductoScreen(
     val cargando by viewModel.cargando.collectAsState()
     val mensaje by viewModel.mensaje.collectAsState()
 
-    // Selector nativo de múltiples fotos reales (RF-19)
+    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+
+    @SuppressLint("MissingPermission")
+    fun obtenerCoordenadasGpsActuales() {
+        fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+            if (location != null) {
+                latitudArticulo = location.latitude
+                longitudArticulo = location.longitude
+                direccionReferencia = "Ubicación GPS actual (%.4f, %.4f)".format(location.latitude, location.longitude)
+                viewModel.actualizarUbicacionGpsUsuario(usuarioId, location.latitude, location.longitude)
+                Toast.makeText(context, "Coordenadas GPS actualizadas", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "Usando zona seleccionada de Cajamarca", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val permisoUbicacionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permisos ->
+        val concedido = permisos[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                permisos[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (concedido) {
+            obtenerCoordenadasGpsActuales()
+        }
+    }
+
     val selectorMultipleFotos = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 5)
     ) { uris ->
@@ -196,9 +242,11 @@ fun PublicarProductoScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(OffWhiteBackground)
+            .statusBarsPadding()
+            .navigationBarsPadding()
             .imePadding()
     ) {
-        // Barra Superior (Mockup Pantalla 7)
+        // Barra Superior
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -225,29 +273,8 @@ fun PublicarProductoScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "Paso 1 de 2",
-                    fontSize = 12.sp,
-                    color = MutedText,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = "Detalles",
-                    fontSize = 12.sp,
-                    color = MutedText,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Barra de progreso verde
             Row(modifier = Modifier.fillMaxWidth()) {
                 Box(
                     modifier = Modifier
@@ -255,14 +282,6 @@ fun PublicarProductoScreen(
                         .height(5.dp)
                         .clip(RoundedCornerShape(4.dp))
                         .background(EmeraldPrimary)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(5.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(Color(0xFFD9EAFF))
                 )
             }
         }
@@ -313,7 +332,6 @@ fun PublicarProductoScreen(
                             modifier = Modifier.fillMaxSize()
                         )
 
-                        // Botón para quitar foto
                         Box(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
@@ -337,7 +355,6 @@ fun PublicarProductoScreen(
                             )
                         }
 
-                        // Etiqueta de Portada (RF-19)
                         Box(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
@@ -360,7 +377,6 @@ fun PublicarProductoScreen(
                     }
                 }
 
-                // Botón para agregar hasta 5 fotos reales
                 if (imagenesSeleccionadas.size < 5) {
                     item {
                         Box(
@@ -406,7 +422,7 @@ fun PublicarProductoScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // CARD PRINCIPAL DE DETALLES DEL ARTÍCULO (RF-20)
+            // CARD PRINCIPAL DE DETALLES DEL ARTÍCULO (RF-20 y RF-09)
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
@@ -418,7 +434,6 @@ fun PublicarProductoScreen(
                         .fillMaxWidth()
                         .padding(20.dp)
                 ) {
-                    // 1. Título del artículo
                     Text(
                         text = "Título del artículo",
                         fontSize = 14.sp,
@@ -452,7 +467,7 @@ fun PublicarProductoScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // 2. Categoría (RF-20)
+                    // Categoría (RF-20)
                     Text(
                         text = "Categoría",
                         fontSize = 14.sp,
@@ -511,7 +526,115 @@ fun PublicarProductoScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // 3. Estado del artículo (RF-20: Botones en grilla 2x2 como en el Mockup Pantalla 7)
+                    // Ubicación / Zona del Artículo para cálculo de distancia en km (RF-09)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Ubicación del artículo (RF-09)",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = DarkSlateText
+                        )
+
+                        OutlinedButton(
+                            onClick = {
+                                val tienePermiso = ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.ACCESS_FINE_LOCATION
+                                ) == PackageManager.PERMISSION_GRANTED
+                                if (tienePermiso) {
+                                    obtenerCoordenadasGpsActuales()
+                                } else {
+                                    permisoUbicacionLauncher.launch(
+                                        arrayOf(
+                                            Manifest.permission.ACCESS_FINE_LOCATION,
+                                            Manifest.permission.ACCESS_COARSE_LOCATION
+                                        )
+                                    )
+                                }
+                            },
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, EmeraldPrimary),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            modifier = Modifier.height(30.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MyLocation,
+                                contentDescription = null,
+                                tint = DeepGreenBrand,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Usar mi GPS",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = DeepGreenBrand
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { zonaExpandida = true }
+                    ) {
+                        OutlinedTextField(
+                            value = direccionReferencia,
+                            onValueChange = {},
+                            readOnly = true,
+                            enabled = false,
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.LocationOn,
+                                    contentDescription = null,
+                                    tint = DeepGreenBrand
+                                )
+                            },
+                            trailingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.KeyboardArrowDown,
+                                    contentDescription = null,
+                                    tint = DarkSlateText
+                                )
+                            },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                disabledTextColor = DarkSlateText,
+                                disabledBorderColor = InputBorder,
+                                disabledContainerColor = InputBackground
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        DropdownMenu(
+                            expanded = zonaExpandida,
+                            onDismissRequest = { zonaExpandida = false },
+                            modifier = Modifier.background(PureWhiteSurface)
+                        ) {
+                            zonasDisponibles.forEach { zona ->
+                                DropdownMenuItem(
+                                    text = { Text(zona.nombre, color = DarkSlateText) },
+                                    onClick = {
+                                        direccionReferencia = zona.nombre
+                                        latitudArticulo = zona.latitud
+                                        longitudArticulo = zona.longitud
+                                        zonaExpandida = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Estado del artículo (RF-20)
                     Text(
                         text = "Estado del artículo",
                         fontSize = 14.sp,
@@ -561,7 +684,6 @@ fun PublicarProductoScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // 4. Descripción
                     Text(
                         text = "Descripción",
                         fontSize = 14.sp,
@@ -620,14 +742,7 @@ fun PublicarProductoScreen(
                         fontSize = 13.sp,
                         color = MutedText
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Agrega etiquetas para ayudar a otros usuarios a proponerte trueques.",
-                        fontSize = 13.sp,
-                        color = DarkSlateText.copy(alpha = 0.8f)
-                    )
-
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -661,7 +776,6 @@ fun PublicarProductoScreen(
                             }
                         }
 
-                        // Botón "+ Agregar interés"
                         Surface(
                             shape = RoundedCornerShape(20.dp),
                             color = PureWhiteSurface,
@@ -716,15 +830,14 @@ fun PublicarProductoScreen(
 
             Spacer(modifier = Modifier.height(22.dp))
 
-            // Botón Principal: Publicar / Siguiente
             Button(
                 onClick = {
                     if (imagenesSeleccionadas.isEmpty()) {
                         errorValidacion = "Debes seleccionar al menos 1 fotografía real del artículo."
                         return@Button
                     }
-                    if (nombre.isBlank()) {
-                        errorValidacion = "Ingresa el título del artículo."
+                    if (nombre.trim().length < 3) {
+                        errorValidacion = "Ingresa el título del artículo (mínimo 3 caracteres)."
                         return@Button
                     }
                     if (categoria.isBlank()) {
@@ -735,8 +848,8 @@ fun PublicarProductoScreen(
                         errorValidacion = "Selecciona el estado físico del artículo."
                         return@Button
                     }
-                    if (descripcion.isBlank()) {
-                        errorValidacion = "Ingresa una descripción del artículo."
+                    if (descripcion.trim().length < 10) {
+                        errorValidacion = "Ingresa una descripción de al menos 10 caracteres."
                         return@Button
                     }
 
@@ -747,7 +860,10 @@ fun PublicarProductoScreen(
                         categoria = categoria,
                         estado = estado,
                         interesesCambio = etiquetasInteres.joinToString(", "),
-                        activo = true
+                        activo = true,
+                        latitud = latitudArticulo,
+                        longitud = longitudArticulo,
+                        direccionReferencia = direccionReferencia
                     )
 
                     viewModel.crearProductoConImagenes(
@@ -781,38 +897,6 @@ fun PublicarProductoScreen(
                         fontWeight = FontWeight.Bold
                     )
                 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-                /*
-                // Validacion extra: Titulo minimo de 5 caracteres
-                if(nombre.trim().length <5){
-                    errorValidacion="El titulo es muy corto(minimo 5 caracteres)"
-                    return@Button
-                }
-
-                // Validacion extra: Descripcion minima de 15 caracteres
-                if(descripcion.trim().length < 15){
-                    errorValidacion = "La Descripcion debe ser detallada mejor el artículo (mínimo 15 caracteres)"
-                    return@Button
-                }
-
-                 */
             }
 
             Spacer(modifier = Modifier.height(16.dp))

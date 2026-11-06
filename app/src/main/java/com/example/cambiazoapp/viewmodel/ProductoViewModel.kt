@@ -7,45 +7,63 @@ import androidx.lifecycle.viewModelScope
 import com.example.cambiazoapp.model.Producto
 import com.example.cambiazoapp.model.Usuario
 import com.example.cambiazoapp.repository.ProductoRepository
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.flow.asStateFlow
 
 class ProductoViewModel : ViewModel() {
 
     private val repository = ProductoRepository()
     private val db = FirebaseFirestore.getInstance()
 
-    private val _productos = MutableStateFlow<List<Producto>>(emptyList())
-    val productos: StateFlow<List<Producto>> = _productos
+    private val _productos = MutableStateFlow(emptyList<Producto>())
+    val productos = _productos.asStateFlow()
 
-    private val _catalogo = MutableStateFlow<List<Producto>>(emptyList())
-    val catalogo: StateFlow<List<Producto>> = _catalogo
+    private val _catalogo = MutableStateFlow(emptyList<Producto>())
+    val catalogo = _catalogo.asStateFlow()
 
-    // Solución sin símbolos anidados que se borren al copiar:
     private val _usuariosMapa = MutableStateFlow(emptyMap<String, Usuario>())
     val usuariosMapa = _usuariosMapa.asStateFlow()
+
     private val _productoSeleccionado = MutableStateFlow<Producto?>(null)
-    val productoSeleccionado: StateFlow<Producto?> = _productoSeleccionado
+    val productoSeleccionado = _productoSeleccionado.asStateFlow()
 
     private val _propietarioProducto = MutableStateFlow<Usuario?>(null)
-    val propietarioProducto: StateFlow<Usuario?> = _propietarioProducto
+    val propietarioProducto = _propietarioProducto.asStateFlow()
 
     private val _perfilUsuarioActual = MutableStateFlow<Usuario?>(null)
-    val perfilUsuarioActual: StateFlow<Usuario?> = _perfilUsuarioActual
+    val perfilUsuarioActual = _perfilUsuarioActual.asStateFlow()
 
-    private val _favoritosIds = MutableStateFlow<Set<String>>(emptySet())
-    val favoritosIds: StateFlow<Set<String>> = _favoritosIds
+    private val _favoritosIds = MutableStateFlow(emptySet<String>())
+    val favoritosIds = _favoritosIds.asStateFlow()
 
     private val _cargando = MutableStateFlow(false)
-    val cargando: StateFlow<Boolean> = _cargando
+    val cargando = _cargando.asStateFlow()
 
     private val _mensaje = MutableStateFlow("")
-    val mensaje: StateFlow<String> = _mensaje
+    val mensaje = _mensaje.asStateFlow()
+
+    private fun mapearDocAUsuario(uid: String, doc: DocumentSnapshot): Usuario {
+        return Usuario(
+            uid = uid,
+            nombre = doc.getString("nombre")?.takeIf { it.isNotBlank() } ?: "Usuario Cambiazo",
+            correo = doc.getString("correo") ?: "",
+            ciudad = doc.getString("ciudad")?.takeIf { it.isNotBlank() } ?: "Cajamarca",
+            barrio = doc.getString("barrio") ?: "",
+            telefono = doc.getString("telefono") ?: "",
+            biografia = doc.getString("biografia") ?: "",
+            fotoUrl = doc.getString("fotoUrl") ?: "",
+            promedioEstrellas = doc.getDouble("promedioEstrellas") ?: 5.0,
+            totalResenas = (doc.getLong("totalResenas") ?: 0L).toInt(),
+            truequesCompletados = (doc.getLong("truequesCompletados") ?: 0L).toInt(),
+            latitud = doc.getDouble("latitud") ?: -7.1617,
+            longitud = doc.getDouble("longitud") ?: -78.5128
+        )
+    }
 
     fun alternarFavorito(productoId: String) {
         val actual = _favoritosIds.value.toMutableSet()
@@ -57,34 +75,33 @@ class ProductoViewModel : ViewModel() {
         _favoritosIds.value = actual
     }
 
-    /**
-     * Carga los datos completos del perfil del usuario autenticado desde Firestore.
-     */
     fun cargarPerfilUsuario(usuarioId: String) {
         if (usuarioId.isBlank()) return
         viewModelScope.launch {
             try {
                 val doc = db.collection("usuarios").document(usuarioId).get().await()
                 if (doc.exists()) {
-                    _perfilUsuarioActual.value = Usuario(
-                        uid = usuarioId,
-                        nombre = doc.getString("nombre")?.takeIf { it.isNotBlank() } ?: "Usuario",
-                        correo = doc.getString("correo") ?: "",
-                        ciudad = doc.getString("ciudad")?.takeIf { it.isNotBlank() } ?: "Cajamarca",
-                        barrio = doc.getString("barrio") ?: "",
-                        telefono = doc.getString("telefono") ?: "",
-                        biografia = doc.getString("biografia") ?: "",
-                        fotoUrl = doc.getString("fotoUrl") ?: ""
-                    )
+                    _perfilUsuarioActual.value = mapearDocAUsuario(usuarioId, doc)
                 }
             } catch (_: Exception) {
             }
         }
     }
 
-    /**
-     * Actualiza el perfil del usuario (incluyendo nueva foto de perfil si fue seleccionada).
-     */
+    fun actualizarUbicacionGpsUsuario(usuarioId: String, latitud: Double, longitud: Double) {
+        if (usuarioId.isBlank()) return
+        viewModelScope.launch {
+            try {
+                db.collection("usuarios")
+                    .document(usuarioId)
+                    .set(mapOf("latitud" to latitud, "longitud" to longitud), SetOptions.merge())
+                    .await()
+                cargarPerfilUsuario(usuarioId)
+            } catch (_: Exception) {
+            }
+        }
+    }
+
     fun actualizarPerfilUsuario(
         context: Context,
         usuarioId: String,
@@ -103,7 +120,6 @@ class ProductoViewModel : ViewModel() {
 
             var urlFotoFinal = fotoActualUrl
 
-            // Si selecciono una nueva foto de la galeria, procesarla y subirla
             if (nuevaFotoUri != null) {
                 val resFoto = repository.procesarYSubirImagen(context, nuevaFotoUri)
                 if (resFoto.isSuccess) {
@@ -174,16 +190,7 @@ class ProductoViewModel : ViewModel() {
                     try {
                         val doc = db.collection("usuarios").document(uid).get().await()
                         if (doc.exists()) {
-                            mapaTemp[uid] = Usuario(
-                                uid = uid,
-                                nombre = doc.getString("nombre")?.takeIf { it.isNotBlank() } ?: "Usuario",
-                                correo = doc.getString("correo") ?: "",
-                                ciudad = doc.getString("ciudad")?.takeIf { it.isNotBlank() } ?: "Cajamarca",
-                                barrio = doc.getString("barrio") ?: "",
-                                telefono = doc.getString("telefono") ?: "",
-                                biografia = doc.getString("biografia") ?: "",
-                                fotoUrl = doc.getString("fotoUrl") ?: ""
-                            )
+                            mapaTemp[uid] = mapearDocAUsuario(uid, doc)
                         }
                     } catch (_: Exception) {
                     }
@@ -213,16 +220,7 @@ class ProductoViewModel : ViewModel() {
                     try {
                         val doc = db.collection("usuarios").document(duenoId).get().await()
                         _propietarioProducto.value = if (doc.exists()) {
-                            Usuario(
-                                uid = duenoId,
-                                nombre = doc.getString("nombre")?.takeIf { it.isNotBlank() } ?: "Usuario Cambiazo",
-                                correo = doc.getString("correo") ?: "",
-                                ciudad = doc.getString("ciudad")?.takeIf { it.isNotBlank() } ?: "Cajamarca",
-                                barrio = doc.getString("barrio") ?: "",
-                                telefono = doc.getString("telefono") ?: "",
-                                biografia = doc.getString("biografia") ?: "",
-                                fotoUrl = doc.getString("fotoUrl") ?: ""
-                            )
+                            mapearDocAUsuario(duenoId, doc)
                         } else {
                             Usuario(uid = duenoId, nombre = "Usuario Cambiazo", ciudad = "Cajamarca")
                         }
@@ -289,11 +287,6 @@ class ProductoViewModel : ViewModel() {
         }
     }
 
-    /**
-     * RF-22 + RF-19: Permite editar un producto reemplazando, eliminando o agregando nuevas
-     * fotografias y actualizando cual es la imagen de portada.
-     * Recibe una lista mixta (Strings de fotos que se conservaron o Uris de fotos nuevas).
-     */
     fun editarProductoConImagenes(
         context: Context,
         productoBase: Producto,
@@ -353,15 +346,12 @@ class ProductoViewModel : ViewModel() {
         viewModelScope.launch {
             _cargando.value = true
             _mensaje.value = ""
-
             val resultado = repository.crearProducto(producto)
-
             if (resultado.isSuccess) {
                 _mensaje.value = "Producto publicado correctamente"
             } else {
                 _mensaje.value = resultado.exceptionOrNull()?.message ?: "Error al publicar el producto"
             }
-
             _cargando.value = false
         }
     }
@@ -370,15 +360,12 @@ class ProductoViewModel : ViewModel() {
         viewModelScope.launch {
             _cargando.value = true
             _mensaje.value = ""
-
             val resultado = repository.editarProducto(producto)
-
             if (resultado.isSuccess) {
                 _mensaje.value = "Producto actualizado correctamente"
             } else {
                 _mensaje.value = resultado.exceptionOrNull()?.message ?: "Error al actualizar el producto"
             }
-
             _cargando.value = false
         }
     }
@@ -387,19 +374,12 @@ class ProductoViewModel : ViewModel() {
         viewModelScope.launch {
             _cargando.value = true
             _mensaje.value = ""
-
             val resultado = repository.cambiarEstadoProducto(productoId, activo)
-
             if (resultado.isSuccess) {
-                _mensaje.value = if (activo) {
-                    "Producto activado correctamente"
-                } else {
-                    "Producto pausado correctamente"
-                }
+                _mensaje.value = if (activo) "Producto activado correctamente" else "Producto pausado correctamente"
             } else {
                 _mensaje.value = resultado.exceptionOrNull()?.message ?: "Error al cambiar el estado del producto"
             }
-
             _cargando.value = false
         }
     }
@@ -408,15 +388,12 @@ class ProductoViewModel : ViewModel() {
         viewModelScope.launch {
             _cargando.value = true
             _mensaje.value = ""
-
             val resultado = repository.eliminarProducto(productoId)
-
             if (resultado.isSuccess) {
                 _mensaje.value = "Producto eliminado correctamente"
             } else {
                 _mensaje.value = resultado.exceptionOrNull()?.message ?: "Error al eliminar el producto"
             }
-
             _cargando.value = false
         }
     }

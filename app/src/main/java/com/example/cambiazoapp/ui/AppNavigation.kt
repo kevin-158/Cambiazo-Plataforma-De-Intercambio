@@ -6,16 +6,19 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.cambiazoapp.ui.screens.ChatTradeScreen
 import com.example.cambiazoapp.ui.screens.DetalleProductoScreen
 import com.example.cambiazoapp.ui.screens.HomeScreen
 import com.example.cambiazoapp.ui.screens.IntercambiosScreen
 import com.example.cambiazoapp.ui.screens.LoginScreen
 import com.example.cambiazoapp.ui.screens.MiInventarioScreen
+import com.example.cambiazoapp.ui.screens.PerfilPublicoScreen
 import com.example.cambiazoapp.ui.screens.PublicarProductoScreen
 import com.example.cambiazoapp.ui.screens.RegistroScreen
 
 /**
  * Controlador central de navegacion entre todas las pantallas de Cambiazo.
+ * Cubre todos los requerimientos de la Entrega 1, 2 y 3.
  */
 @Composable
 fun AppNavigation() {
@@ -27,7 +30,6 @@ fun AppNavigation() {
         startDestination = "login"
     ) {
 
-        // Pantalla 1: Inicio de Sesion (RF-01, RF-02, RF-03)
         composable("login") {
             LoginScreen(
                 onIrARegistro = {
@@ -43,7 +45,6 @@ fun AppNavigation() {
             )
         }
 
-        // Pantalla 2: Registro de Usuario (RF-04, RF-05, RF-06)
         composable("registro") {
             RegistroScreen(
                 onIrALogin = {
@@ -77,7 +78,7 @@ fun AppNavigation() {
             )
         }
 
-        // Pantalla 4 y 5: Detalle del Articulo (RF-10) + Modal de Propuesta de Trueque (RF-13)
+        // Pantalla 4 y 5: Detalle del Articulo (RF-10, RF-11) + Modal de Propuesta (RF-13)
         composable(
             route = "detalle/{productoId}",
             arguments = listOf(navArgument("productoId") { type = NavType.StringType })
@@ -95,20 +96,64 @@ fun AppNavigation() {
                     navController.navigate("intercambios") {
                         popUpTo("inicio")
                     }
+                },
+                onVerPerfilPublico = { duenoId ->
+                    if (duenoId.isNotBlank()) {
+                        navController.navigate("perfil_publico/$duenoId")
+                    }
                 }
             )
         }
 
-        // Pantalla 6 (Estado de propuestas): Actividad de Trueques (RF-17)
+        // Listado de Propuestas con Aviso de Mensajes Nuevos (RF-16, RF-17)
         composable("intercambios") {
             IntercambiosScreen(
                 onVolver = {
                     navController.popBackStack()
+                },
+                onAbrirChatNegociacion = { intercambioId ->
+                    navController.navigate("chat/$intercambioId")
                 }
             )
         }
 
-        // Pantalla 7: Publicar Nuevo Articulo con multiples fotos y portada (RF-19, RF-20, RF-21)
+        // Pantalla 6 y 9: Chat en Tiempo Real (RF-16), Mapa de Puntos Seguros (RF-18) y Calificacion (RF-25/26/27)
+        composable(
+            route = "chat/{intercambioId}",
+            arguments = listOf(navArgument("intercambioId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val intercambioId = backStackEntry.arguments?.getString("intercambioId") ?: ""
+            ChatTradeScreen(
+                intercambioId = intercambioId,
+                onVolver = {
+                    navController.popBackStack()
+                },
+                onVerPerfilPublico = { otroUsuarioId ->
+                    if (otroUsuarioId.isNotBlank()) {
+                        navController.navigate("perfil_publico/$otroUsuarioId")
+                    }
+                }
+            )
+        }
+
+        // Perfil Publico del Dueño con Pestañas Inventario, Historial y Reseñas (RF-11, RF-24)
+        composable(
+            route = "perfil_publico/{usuarioId}",
+            arguments = listOf(navArgument("usuarioId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val usuarioId = backStackEntry.arguments?.getString("usuarioId") ?: ""
+            PerfilPublicoScreen(
+                usuarioId = usuarioId,
+                onVolver = {
+                    navController.popBackStack()
+                },
+                onIrADetalleProducto = { productoId ->
+                    navController.navigate("detalle/$productoId")
+                }
+            )
+        }
+
+        // Pantalla 7: Publicar Nuevo Articulo (RF-19, RF-20, RF-21, RF-09)
         composable("publicar") {
             PublicarProductoScreen(
                 onProductoPublicado = {
@@ -117,8 +162,7 @@ fun AppNavigation() {
             )
         }
 
-        // Pantalla 8: Mi Inventario / Gestion de articulos propios (RF-22)
-        // Pantalla 8: Mi Inventario / Perfil (RF-22, RF-23, RF-24)
+        // Pantalla 8: Mi Inventario y Mi Perfil (RF-22, RF-23, RF-24)
         composable("inventario") {
             MiInventarioScreen(
                 onVolver = {

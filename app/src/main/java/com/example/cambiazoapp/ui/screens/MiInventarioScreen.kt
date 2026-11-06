@@ -145,6 +145,7 @@ fun MiInventarioScreen(
     var productoAEliminar by remember { mutableStateOf<Producto?>(null) }
     var mostrarEditarPerfil by remember { mutableStateOf(false) }
     var mostrarConfirmacionCerrarSesion by remember { mutableStateOf(false) }
+    val resenasMias by intercambioViewModel.resenasUsuario.collectAsState()
 
     // Cargar inventario, perfil del usuario e historial de trueques
     LaunchedEffect(usuarioId) {
@@ -152,6 +153,7 @@ fun MiInventarioScreen(
             viewModel.cargarProductosUsuario(usuarioId)
             viewModel.cargarPerfilUsuario(usuarioId)
             intercambioViewModel.cargarMisIntercambios(usuarioId)
+            intercambioViewModel.cargarResenasUsuario(usuarioId)
         }
     }
 
