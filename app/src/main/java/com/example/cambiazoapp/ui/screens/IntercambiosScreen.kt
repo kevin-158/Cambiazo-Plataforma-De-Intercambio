@@ -9,10 +9,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -37,6 +37,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -75,9 +76,13 @@ import com.example.cambiazoapp.ui.theme.PureWhiteSurface
 import com.example.cambiazoapp.viewmodel.IntercambioViewModel
 import com.google.firebase.auth.FirebaseAuth
 
+// Pantalla de Gestión de Propuestas y Mensajes de Trueque (RF-16 y RF-17)
 @Composable
 fun IntercambiosScreen(
     onVolver: () -> Unit,
+    onIrAInicio: () -> Unit = onVolver,
+    onIrAPublicar: () -> Unit = {},
+    onIrAPerfil: () -> Unit = {},
     onAbrirChatNegociacion: (String) -> Unit = {},
     viewModel: IntercambioViewModel = viewModel()
 ) {
@@ -86,8 +91,10 @@ fun IntercambiosScreen(
 
     val propuestasRecibidas by viewModel.propuestasRecibidas.collectAsState()
     val propuestasEnviadas by viewModel.propuestasEnviadas.collectAsState()
+    val totalNoLeidos by viewModel.totalNoLeidos.collectAsState()
     val cargando by viewModel.cargando.collectAsState()
 
+    // Escuchar en tiempo real las propuestas y mensajes nuevos
     LaunchedEffect(usuarioActualId) {
         if (usuarioActualId.isNotEmpty()) {
             viewModel.cargarMisIntercambios(usuarioActualId)
@@ -98,200 +105,223 @@ fun IntercambiosScreen(
     val noLeidosRecibidas = propuestasRecibidas.sumOf { it.noLeidosPropietario }
     val noLeidosEnviadas = propuestasEnviadas.sumOf { it.noLeidosSolicitante }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(OffWhiteBackground)
-            .statusBarsPadding()
-            .navigationBarsPadding()
-    ) {
-        Row(
+    Scaffold(
+        containerColor = OffWhiteBackground,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        bottomBar = {
+            // Barra inferior con "Trueques" iluminado en verde
+            CambiazoBottomNavigationBar(
+                seccionActiva = "trueques",
+                totalNoLeidos = totalNoLeidos,
+                onHomeClick = onIrAInicio,
+                onSearchClick = onIrAInicio,
+                onPostClick = onIrAPublicar,
+                onActivityClick = {},
+                onProfileClick = onIrAPerfil
+            )
+        }
+    ) { innerPadding ->
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .background(PureWhiteSurface)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .fillMaxSize()
+                .padding(innerPadding)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onVolver) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Volver",
-                        tint = DarkSlateText
-                    )
-                }
-                Spacer(modifier = Modifier.width(4.dp))
-                Column {
-                    Text(
-                        text = "Actividad y Mensajes",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = DarkSlateText
-                    )
-                    Text(
-                        text = "Toca una propuesta para abrir el chat y mapa en vivo",
-                        fontSize = 12.sp,
-                        color = MutedText
-                    )
-                }
-            }
-
-            IconButton(
-                onClick = { viewModel.cargarMisIntercambios(usuarioActualId) }
+            // Cabecera superior ajustada al borde superior
+            Surface(
+                color = PureWhiteSurface,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = "Actualizar",
-                    tint = DeepGreenBrand
-                )
-            }
-        }
-
-        TabRow(
-            selectedTabIndex = tabSeleccionado,
-            containerColor = PureWhiteSurface,
-            contentColor = DeepGreenBrand,
-            indicator = { tabPositions ->
-                TabRowDefaults.SecondaryIndicator(
-                    modifier = Modifier.tabIndicatorOffset(tabPositions[tabSeleccionado]),
-                    color = EmeraldPrimary,
-                    height = 3.dp
-                )
-            }
-        ) {
-            Tab(
-                selected = tabSeleccionado == 0,
-                onClick = { tabSeleccionado = 0 },
-                text = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "Recibidas (${propuestasRecibidas.size})",
-                            fontWeight = if (tabSeleccionado == 0) FontWeight.Bold else FontWeight.Medium,
-                            color = if (tabSeleccionado == 0) DeepGreenBrand else MutedText
-                        )
-                        if (noLeidosRecibidas > 0) {
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Surface(
-                                shape = CircleShape,
-                                color = EmeraldPrimary
-                            ) {
-                                Text(
-                                    text = "$noLeidosRecibidas",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            )
-            Tab(
-                selected = tabSeleccionado == 1,
-                onClick = { tabSeleccionado = 1 },
-                text = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "Enviadas (${propuestasEnviadas.size})",
-                            fontWeight = if (tabSeleccionado == 1) FontWeight.Bold else FontWeight.Medium,
-                            color = if (tabSeleccionado == 1) DeepGreenBrand else MutedText
-                        )
-                        if (noLeidosEnviadas > 0) {
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Surface(
-                                shape = CircleShape,
-                                color = EmeraldPrimary
-                            ) {
-                                Text(
-                                    text = "$noLeidosEnviadas",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            )
-        }
-
-        if (cargando) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = EmeraldPrimary)
-            }
-        } else if (listaMostrar.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(28.dp)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.SwapHoriz,
-                        contentDescription = null,
-                        tint = MutedText,
-                        modifier = Modifier.size(56.dp)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = if (tabSeleccionado == 0) {
-                            "Aún no has recibido propuestas de trueque."
-                        } else {
-                            "Aún no has enviado propuestas de trueque."
-                        },
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = DarkSlateText,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
-        } else {
-            LazyColumn(
-                contentPadding = PaddingValues(18.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-            ) {
-                items(listaMostrar, key = { it.id }) { intercambio ->
-                    TarjetaEstadoPropuesta(
-                        intercambio = intercambio,
-                        esPropuestaRecibida = tabSeleccionado == 0,
-                        onAbrirChat = { onAbrirChatNegociacion(intercambio.id) },
-                        onAceptar = {
-                            viewModel.cambiarEstadoPropuesta(
-                                intercambioId = intercambio.id,
-                                nuevoEstado = "Aceptada",
-                                usuarioActualId = usuarioActualId
-                            )
-                        },
-                        onRechazar = {
-                            viewModel.cambiarEstadoPropuesta(
-                                intercambioId = intercambio.id,
-                                nuevoEstado = "Rechazada",
-                                usuarioActualId = usuarioActualId
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = onVolver) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Volver",
+                                tint = DarkSlateText
                             )
                         }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Column {
+                            Text(
+                                text = "Mis Trueques y Mensajes",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = DarkSlateText
+                            )
+                            Text(
+                                text = "Toca una propuesta para abrir el chat y mapa en vivo",
+                                fontSize = 12.sp,
+                                color = MutedText
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = { viewModel.cargarMisIntercambios(usuarioActualId) }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Actualizar",
+                            tint = DeepGreenBrand
+                        )
+                    }
+                }
+            }
+
+            // Pestañas de propuestas Recibidas y Enviadas con contador de mensajes nuevos (RF-16)
+            TabRow(
+                selectedTabIndex = tabSeleccionado,
+                containerColor = PureWhiteSurface,
+                contentColor = DeepGreenBrand,
+                indicator = { tabPositions ->
+                    TabRowDefaults.SecondaryIndicator(
+                        modifier = Modifier.tabIndicatorOffset(tabPositions[tabSeleccionado]),
+                        color = EmeraldPrimary,
+                        height = 3.dp
                     )
+                }
+            ) {
+                Tab(
+                    selected = tabSeleccionado == 0,
+                    onClick = { tabSeleccionado = 0 },
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Recibidas (${propuestasRecibidas.size})",
+                                fontWeight = if (tabSeleccionado == 0) FontWeight.Bold else FontWeight.Medium,
+                                color = if (tabSeleccionado == 0) DeepGreenBrand else MutedText
+                            )
+                            if (noLeidosRecibidas > 0) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color(0xFFE74C3C)
+                                ) {
+                                    Text(
+                                        text = "$noLeidosRecibidas",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                )
+                Tab(
+                    selected = tabSeleccionado == 1,
+                    onClick = { tabSeleccionado = 1 },
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Enviadas (${propuestasEnviadas.size})",
+                                fontWeight = if (tabSeleccionado == 1) FontWeight.Bold else FontWeight.Medium,
+                                color = if (tabSeleccionado == 1) DeepGreenBrand else MutedText
+                            )
+                            if (noLeidosEnviadas > 0) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color(0xFFE74C3C)
+                                ) {
+                                    Text(
+                                        text = "$noLeidosEnviadas",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                )
+            }
+
+            if (cargando) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = EmeraldPrimary)
+                }
+            } else if (listaMostrar.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SwapHoriz,
+                            contentDescription = null,
+                            tint = MutedText,
+                            modifier = Modifier.size(56.dp)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = if (tabSeleccionado == 0) {
+                                "Aún no has recibido propuestas de trueque."
+                            } else {
+                                "Aún no has enviado propuestas de trueque."
+                            },
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = DarkSlateText,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    contentPadding = PaddingValues(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                ) {
+                    items(listaMostrar, key = { it.id }) { intercambio ->
+                        TarjetaEstadoPropuesta(
+                            intercambio = intercambio,
+                            esPropuestaRecibida = tabSeleccionado == 0,
+                            onAbrirChat = { onAbrirChatNegociacion(intercambio.id) },
+                            onAceptar = {
+                                viewModel.cambiarEstadoPropuesta(
+                                    intercambioId = intercambio.id,
+                                    nuevoEstado = "Aceptada",
+                                    usuarioActualId = usuarioActualId
+                                )
+                            },
+                            onRechazar = {
+                                viewModel.cambiarEstadoPropuesta(
+                                    intercambioId = intercambio.id,
+                                    nuevoEstado = "Rechazada",
+                                    usuarioActualId = usuarioActualId
+                                )
+                            }
+                        )
+                    }
                 }
             }
         }
     }
 }
 
+// Tarjeta individual de propuesta con aviso de mensajes nuevos y estado actualizado (RF-16 y RF-17)
 @Composable
 fun TarjetaEstadoPropuesta(
     intercambio: Intercambio,
@@ -345,14 +375,14 @@ fun TarjetaEstadoPropuesta(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // RF-16: Aviso de mensajes nuevos sin leer
+                    // Globo rojo/verde de aviso de mensajes nuevos sin leer (RF-16)
                     if (cantidadNoLeidos > 0) {
                         Surface(
                             shape = RoundedCornerShape(12.dp),
-                            color = EmeraldPrimary
+                            color = Color(0xFFE74C3C)
                         ) {
                             Text(
-                                text = "$cantidadNoLeidos nuevo(s)",
+                                text = "$cantidadNoLeidos mensaje(s) nuevo(s)",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
@@ -379,7 +409,7 @@ fun TarjetaEstadoPropuesta(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Comparativa visual de los dos articulos
+            // Comparativa visual de los dos artículos
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -471,12 +501,13 @@ fun TarjetaEstadoPropuesta(
                 }
             }
 
-            // Ultimo mensaje del chat en tiempo real (RF-16)
+            // Último mensaje recibido o enviado en el chat (RF-16)
             if (intercambio.ultimoMensaje.isNotBlank()) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = InputBackground,
+                    color = if (cantidadNoLeidos > 0) LightGreenTint else InputBackground,
+                    border = if (cantidadNoLeidos > 0) BorderStroke(1.dp, EmeraldPrimary) else null,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -493,6 +524,7 @@ fun TarjetaEstadoPropuesta(
                         Text(
                             text = intercambio.ultimoMensaje,
                             fontSize = 13.sp,
+                            fontWeight = if (cantidadNoLeidos > 0) FontWeight.Bold else FontWeight.Normal,
                             color = DarkSlateText,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -501,7 +533,6 @@ fun TarjetaEstadoPropuesta(
                 }
             }
 
-            // Punto de encuentro si existe (RF-18)
             if (intercambio.puntoEncuentroNombre.isNotBlank()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -527,7 +558,6 @@ fun TarjetaEstadoPropuesta(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Botones rapidos de accion + Boton de Abrir Chat y Mapa
             if (intercambio.estado == "Pendiente" && esPropuestaRecibida) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -573,10 +603,10 @@ fun TarjetaEstadoPropuesta(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = if (intercambio.estado == "Completada") {
-                        "Ver Chat / Calificar Trueque ★"
-                    } else {
-                        "Abrir Chat en Vivo y Mapa 📍"
+                    text = when {
+                        cantidadNoLeidos > 0 -> "Ver $cantidadNoLeidos Mensaje(s) Nuevo(s) 💬"
+                        intercambio.estado == "Completada" -> "Ver Chat / Calificar Trueque ★"
+                        else -> "Abrir Chat en Vivo y Mapa 📍"
                     },
                     color = Color.White,
                     fontWeight = FontWeight.Bold

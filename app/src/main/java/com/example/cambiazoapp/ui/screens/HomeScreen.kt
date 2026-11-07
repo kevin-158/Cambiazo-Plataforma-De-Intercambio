@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -79,9 +80,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -107,6 +110,7 @@ import com.example.cambiazoapp.viewmodel.ProductoViewModel
 import com.google.android.gms.location.LocationServices
 import com.google.firebase.auth.FirebaseAuth
 
+// Pantalla 3: Catálogo principal interactivo con búsqueda, filtros y distancia real en km (RF-07, RF-08, RF-09)
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun HomeScreen(
@@ -118,6 +122,7 @@ fun HomeScreen(
     intercambioViewModel: IntercambioViewModel = viewModel()
 ) {
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
     val usuarioActualId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
 
     val perfilActual by viewModel.perfilUsuarioActual.collectAsState()
@@ -127,14 +132,15 @@ fun HomeScreen(
     val cargando by viewModel.cargando.collectAsState()
     val totalNoLeidos by intercambioViewModel.totalNoLeidos.collectAsState()
 
-    // Coordenadas actuales del usuario para calcular distancia real en km (RF-09)
+    // Coordenadas actuales del usuario para calcular distancia en kilómetros (RF-09)
     var miLatitud by remember { mutableDoubleStateOf(-7.1617) }
     var miLongitud by remember { mutableDoubleStateOf(-78.5128) }
 
     var textoBusqueda by remember { mutableStateOf("") }
+    var buscadorEnfocado by remember { mutableStateOf(false) }
     var categoriaSeleccionada by remember { mutableStateOf("Todos") }
 
-    // Estados del Modal de Filtros combinables (RF-07, RF-08, RF-09)
+    // Estados del modal de filtros combinables
     var mostrarModalFiltros by remember { mutableStateOf(false) }
     var estadoFisicoFiltro by remember { mutableStateOf("Todos") }
     var ordenSeleccionado by remember { mutableStateOf("Más cercanos a ti") }
@@ -143,6 +149,7 @@ fun HomeScreen(
     val focusRequesterBusqueda = remember { FocusRequester() }
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
+    // Obtiene las coordenadas GPS reales del celular
     @SuppressLint("MissingPermission")
     fun actualizarGpsLocal() {
         fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
@@ -164,6 +171,7 @@ fun HomeScreen(
         }
     }
 
+    // Cargar perfil, catálogo y escuchar mensajes nuevos al entrar a Home
     LaunchedEffect(usuarioActualId) {
         if (usuarioActualId.isNotEmpty()) {
             viewModel.cargarPerfilUsuario(usuarioActualId)
@@ -212,7 +220,7 @@ fun HomeScreen(
     val hayFiltrosExtraActivos = estadoFisicoFiltro != "Todos" ||
             distanciaMaximaFiltro != "Cualquier distancia"
 
-    // Filtrado reactivo combinando palabra clave (RF-08), categoria (RF-07), estado y distancia real en km (RF-09)
+    // Filtrar productos por categoría (RF-07), palabras clave (RF-08), estado y distancia real en km (RF-09)
     val productosFiltrados = remember(
         catalogo,
         categoriaSeleccionada,
@@ -263,6 +271,7 @@ fun HomeScreen(
         }
     }
 
+    // Modal desplegable de filtros avanzados
     if (mostrarModalFiltros) {
         ModalBottomSheet(
             onDismissRequest = { mostrarModalFiltros = false },
@@ -299,7 +308,6 @@ fun HomeScreen(
                 HorizontalDivider(color = InputBorder)
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // 1. Ordenar por
                 Text(
                     text = "Ordenar por",
                     fontSize = 14.sp,
@@ -345,7 +353,6 @@ fun HomeScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 2. Distancia maxima en km (RF-09)
                 Text(
                     text = "Distancia máxima (RF-09)",
                     fontSize = 14.sp,
@@ -379,7 +386,6 @@ fun HomeScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 3. Estado Físico del Artículo
                 Text(
                     text = "Estado del artículo",
                     fontSize = 14.sp,
@@ -456,12 +462,19 @@ fun HomeScreen(
     val nombreCortoSaludo = perfilActual?.nombre?.trim()?.split(" ")?.firstOrNull() ?: "Usuario"
     val ciudadSaludo = perfilActual?.ciudad?.takeIf { it.isNotBlank() } ?: "Cajamarca"
 
+    // Determinar si en la barra inferior se ilumina "inicio" o "buscar"
+    val seccionBarraActiva = if (buscadorEnfocado || textoBusqueda.isNotEmpty()) "buscar" else "inicio"
+
     Scaffold(
         containerColor = OffWhiteBackground,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             CambiazoBottomNavigationBar(
+                seccionActiva = seccionBarraActiva,
                 totalNoLeidos = totalNoLeidos,
                 onHomeClick = {
+                    focusManager.clearFocus()
+                    buscadorEnfocado = false
                     categoriaSeleccionada = "Todos"
                     estadoFisicoFiltro = "Todos"
                     distanciaMaximaFiltro = "Cualquier distancia"
@@ -486,9 +499,9 @@ fun HomeScreen(
                 .statusBarsPadding()
                 .padding(horizontal = 18.dp)
         ) {
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // 1. Cabecera: Saludo, Ubicación GPS y Notificaciones con contador de mensajes (RF-16)
+            // 1. Cabecera con saludo, ubicación GPS y campana con aviso de mensajes nuevos (RF-16)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -529,7 +542,7 @@ fun HomeScreen(
                     }
                 }
 
-                // Campana de actividad y mensajes nuevos (RF-16)
+                // Botón campana con contador en vivo de mensajes nuevos sin leer (RF-16)
                 Box {
                     Surface(
                         shape = CircleShape,
@@ -571,7 +584,7 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // 2. Barra de Búsqueda Dedicada combinable con Filtros (RF-08)
+            // 2. Barra de búsqueda dedicada combinable con filtros (RF-08)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -598,7 +611,12 @@ fun HomeScreen(
                     },
                     trailingIcon = {
                         if (textoBusqueda.isNotEmpty()) {
-                            IconButton(onClick = { textoBusqueda = "" }) {
+                            IconButton(
+                                onClick = {
+                                    textoBusqueda = ""
+                                    focusManager.clearFocus()
+                                }
+                            ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
                                     contentDescription = "Limpiar búsqueda",
@@ -620,6 +638,7 @@ fun HomeScreen(
                     modifier = Modifier
                         .weight(1f)
                         .focusRequester(focusRequesterBusqueda)
+                        .onFocusChanged { buscadorEnfocado = it.isFocused }
                 )
 
                 Box {
@@ -656,9 +675,58 @@ fun HomeScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // 3. Chips de Categorías (RF-07)
+            // Banner de aviso si el usuario tiene mensajes nuevos sin leer (RF-16)
+            if (totalNoLeidos > 0) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = LightGreenTint,
+                    border = BorderStroke(1.dp, EmeraldPrimary),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onIrAActividad() }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = CircleShape,
+                                color = EmeraldPrimary,
+                                modifier = Modifier.size(22.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = "$totalNoLeidos",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Tienes mensajes o propuestas nuevas en Trueques",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = DeepGreenBrand
+                            )
+                        }
+                        Text(
+                            text = "Ver →",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = DeepGreenBrand
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+            }
+
+            // 3. Chips horizontales de categorías (RF-07)
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.fillMaxWidth()
@@ -683,7 +751,7 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // 4. Encabezado "Cerca de ti" + Acción recargar
+            // 4. Encabezado "Cerca de ti" + botón Actualizar
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -724,7 +792,7 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // 5. Grilla de Artículos del Catálogo con Distancia Real en km (RF-07, RF-08, RF-09)
+            // 5. Grilla de artículos del catálogo con distancia real en km (RF-07, RF-08, RF-09)
             if (cargando) {
                 Box(
                     modifier = Modifier
@@ -817,6 +885,7 @@ fun HomeScreen(
     }
 }
 
+// Tarjeta individual de artículo dentro del catálogo principal
 @Composable
 fun TarjetaProductoCatalogo(
     producto: Producto,
@@ -864,7 +933,7 @@ fun TarjetaProductoCatalogo(
                     modifier = Modifier.fillMaxSize()
                 )
 
-                // Badge superior izquierdo: Distancia Real en km (RF-09)
+                // Etiqueta de distancia geolocalizada en km (RF-09)
                 Surface(
                     shape = RoundedCornerShape(16.dp),
                     color = PureWhiteSurface.copy(alpha = 0.92f),
@@ -892,7 +961,7 @@ fun TarjetaProductoCatalogo(
                     }
                 }
 
-                // Corazón Favorito (RF-12)
+                // Botón de favorito (RF-12)
                 Surface(
                     shape = CircleShape,
                     color = PureWhiteSurface.copy(alpha = 0.92f),
@@ -912,7 +981,7 @@ fun TarjetaProductoCatalogo(
                     }
                 }
 
-                // Estado físico del artículo (RF-20)
+                // Etiqueta de estado físico (RF-20)
                 if (producto.estado.isNotBlank()) {
                     Surface(
                         shape = RoundedCornerShape(6.dp),
@@ -1028,8 +1097,10 @@ fun TarjetaProductoCatalogo(
     }
 }
 
+// Barra de navegación inferior global en español con resaltado verde según la sección activa
 @Composable
 fun CambiazoBottomNavigationBar(
+    seccionActiva: String = "inicio", // "inicio", "buscar", "trueques", "perfil"
     totalNoLeidos: Int = 0,
     onHomeClick: () -> Unit,
     onSearchClick: () -> Unit,
@@ -1050,52 +1121,59 @@ fun CambiazoBottomNavigationBar(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // 1. Inicio
+            val esInicio = seccionActiva == "inicio"
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(EmeraldPrimary.copy(alpha = 0.18f))
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(if (esInicio) EmeraldPrimary.copy(alpha = 0.2f) else Color.Transparent)
                     .clickable { onHomeClick() }
                     .padding(vertical = 6.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Home,
-                    contentDescription = "Home",
-                    tint = DeepGreenBrand,
+                    contentDescription = "Inicio",
+                    tint = if (esInicio) DeepGreenBrand else DarkSlateText,
                     modifier = Modifier.size(22.dp)
                 )
                 Text(
-                    text = "Home",
+                    text = "Inicio",
                     fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = DeepGreenBrand,
+                    fontWeight = if (esInicio) FontWeight.Bold else FontWeight.Normal,
+                    color = if (esInicio) DeepGreenBrand else DarkSlateText,
                     maxLines = 1
                 )
             }
 
+            // 2. Buscar
+            val esBuscar = seccionActiva == "buscar"
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(if (esBuscar) EmeraldPrimary.copy(alpha = 0.2f) else Color.Transparent)
                     .clickable { onSearchClick() }
                     .padding(vertical = 6.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Search,
-                    contentDescription = "Search",
-                    tint = DarkSlateText,
+                    contentDescription = "Buscar",
+                    tint = if (esBuscar) DeepGreenBrand else DarkSlateText,
                     modifier = Modifier.size(22.dp)
                 )
                 Text(
-                    text = "Search",
+                    text = "Buscar",
                     fontSize = 10.sp,
-                    color = DarkSlateText,
+                    fontWeight = if (esBuscar) FontWeight.Bold else FontWeight.Normal,
+                    color = if (esBuscar) DeepGreenBrand else DarkSlateText,
                     maxLines = 1
                 )
             }
 
+            // 3. Publicar (Botón central circular verde +)
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
@@ -1113,13 +1191,13 @@ fun CambiazoBottomNavigationBar(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
-                        contentDescription = "Post",
+                        contentDescription = "Publicar",
                         tint = Color.White,
                         modifier = Modifier.size(24.dp)
                     )
                 }
                 Text(
-                    text = "Post",
+                    text = "Publicar",
                     fontSize = 10.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = DarkSlateText,
@@ -1127,11 +1205,13 @@ fun CambiazoBottomNavigationBar(
                 )
             }
 
-            // 4. Activity con indicador de mensajes nuevos (RF-16)
+            // 4. Trueques (con globo de mensajes nuevos en tiempo real - RF-16)
+            val esTrueques = seccionActiva == "trueques"
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(if (esTrueques) EmeraldPrimary.copy(alpha = 0.2f) else Color.Transparent)
                     .clickable { onActivityClick() }
                     .padding(vertical = 6.dp),
                 contentAlignment = Alignment.Center
@@ -1139,14 +1219,15 @@ fun CambiazoBottomNavigationBar(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
                         imageVector = Icons.Default.SwapHoriz,
-                        contentDescription = "Activity",
-                        tint = DarkSlateText,
+                        contentDescription = "Trueques",
+                        tint = if (esTrueques) DeepGreenBrand else DarkSlateText,
                         modifier = Modifier.size(22.dp)
                     )
                     Text(
-                        text = "Activity",
+                        text = "Trueques",
                         fontSize = 10.sp,
-                        color = DarkSlateText,
+                        fontWeight = if (esTrueques) FontWeight.Bold else FontWeight.Normal,
+                        color = if (esTrueques) DeepGreenBrand else DarkSlateText,
                         maxLines = 1
                     )
                 }
@@ -1154,10 +1235,10 @@ fun CambiazoBottomNavigationBar(
                 if (totalNoLeidos > 0) {
                     Surface(
                         shape = CircleShape,
-                        color = EmeraldPrimary,
+                        color = Color(0xFFE74C3C),
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .padding(end = 14.dp)
+                            .padding(end = 12.dp)
                     ) {
                         Text(
                             text = "$totalNoLeidos",
@@ -1170,24 +1251,28 @@ fun CambiazoBottomNavigationBar(
                 }
             }
 
+            // 5. Perfil
+            val esPerfil = seccionActiva == "perfil"
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(if (esPerfil) EmeraldPrimary.copy(alpha = 0.2f) else Color.Transparent)
                     .clickable { onProfileClick() }
                     .padding(vertical = 6.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.PersonOutline,
-                    contentDescription = "Profile",
-                    tint = DarkSlateText,
+                    contentDescription = "Perfil",
+                    tint = if (esPerfil) DeepGreenBrand else DarkSlateText,
                     modifier = Modifier.size(22.dp)
                 )
                 Text(
-                    text = "Profile",
+                    text = "Perfil",
                     fontSize = 10.sp,
-                    color = DarkSlateText,
+                    fontWeight = if (esPerfil) FontWeight.Bold else FontWeight.Normal,
+                    color = if (esPerfil) DeepGreenBrand else DarkSlateText,
                     maxLines = 1
                 )
             }

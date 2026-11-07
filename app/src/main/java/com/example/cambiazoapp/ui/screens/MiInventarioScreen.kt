@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -112,18 +113,19 @@ import com.example.cambiazoapp.ui.theme.LightGreenTint
 import com.example.cambiazoapp.ui.theme.MutedText
 import com.example.cambiazoapp.ui.theme.OffWhiteBackground
 import com.example.cambiazoapp.ui.theme.PureWhiteSurface
+import com.example.cambiazoapp.utils.UbicacionUtils
 import com.example.cambiazoapp.viewmodel.IntercambioViewModel
 import com.example.cambiazoapp.viewmodel.ProductoViewModel
 import com.google.firebase.auth.FirebaseAuth
 
-/**
- * Pantalla 8: Perfil de Usuario, Edicion de Perfil y Gestion de Mi Inventario (RF-22, RF-23, RF-24).
- */
+// Pantalla 8: Perfil de Usuario, Edición de Perfil y Gestión de Mi Inventario (RF-22, RF-23, RF-24)
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MiInventarioScreen(
     onVolver: () -> Unit = {},
+    onIrAInicio: () -> Unit = onVolver,
     onIrAPublicar: () -> Unit = {},
+    onIrAActividad: () -> Unit = {},
     onCerrarSesion: () -> Unit = {},
     viewModel: ProductoViewModel = viewModel(),
     intercambioViewModel: IntercambioViewModel = viewModel()
@@ -137,17 +139,18 @@ fun MiInventarioScreen(
 
     val recibidas by intercambioViewModel.propuestasRecibidas.collectAsState()
     val enviadas by intercambioViewModel.propuestasEnviadas.collectAsState()
+    val misResenas by intercambioViewModel.resenasUsuario.collectAsState()
+    val totalNoLeidos by intercambioViewModel.totalNoLeidos.collectAsState()
 
     var tabSeleccionado by remember { mutableIntStateOf(0) }
 
-    // Estados para modales y acciones
+    // Estados para edición de artículo, edición de perfil y confirmación de cierre de sesión
     var productoEditando by remember { mutableStateOf<Producto?>(null) }
     var productoAEliminar by remember { mutableStateOf<Producto?>(null) }
     var mostrarEditarPerfil by remember { mutableStateOf(false) }
     var mostrarConfirmacionCerrarSesion by remember { mutableStateOf(false) }
-    val resenasMias by intercambioViewModel.resenasUsuario.collectAsState()
 
-    // Cargar inventario, perfil del usuario e historial de trueques
+    // Cargar inventario, perfil, trueques y reseñas reales al abrir la pantalla
     LaunchedEffect(usuarioId) {
         if (usuarioId.isNotEmpty()) {
             viewModel.cargarProductosUsuario(usuarioId)
@@ -157,14 +160,28 @@ fun MiInventarioScreen(
         }
     }
 
-    // Filtrar trueques completados para la pestaña Historial y para el nivel del usuario
+    // Filtrar trueques completados para la pestaña Historial (RF-24)
     val historialCompletados = remember(recibidas, enviadas) {
         (recibidas + enviadas)
             .filter { it.estado == "Completada" }
             .distinctBy { it.id }
     }
 
-    // Si esta editando un articulo, mostrar el formulario completo con edicion de imagenes (RF-22)
+    // Calcular promedio real de estrellas del usuario actual (RF-11 / RF-26)
+    val promedioReal = remember(misResenas, perfilUsuario) {
+        if (misResenas.isNotEmpty()) {
+            misResenas.map { it.estrellas }.average()
+        } else {
+            perfilUsuario?.promedioEstrellas ?: 5.0
+        }
+    }
+
+    val nivelGamificacion = UbicacionUtils.obtenerNivelUsuario(
+        truequesCompletados = historialCompletados.size,
+        totalArticulos = productos.size
+    )
+
+    // Si está editando un artículo, mostrar el formulario con edición de imágenes (RF-22)
     if (productoEditando != null) {
         EditarProductoForm(
             producto = productoEditando!!,
@@ -193,7 +210,7 @@ fun MiInventarioScreen(
         return
     }
 
-    // Si esta editando su perfil de usuario, mostrar la pantalla de Edicion de Perfil
+    // Si está editando su perfil de usuario, mostrar el formulario de edición de perfil
     if (mostrarEditarPerfil) {
         EditarPerfilForm(
             usuarioActual = perfilUsuario ?: Usuario(uid = usuarioId),
@@ -224,7 +241,7 @@ fun MiInventarioScreen(
         return
     }
 
-    // Modal de confirmacion antes de Cerrar Sesion
+    // Cuadro de diálogo de confirmación antes de cerrar sesión
     if (mostrarConfirmacionCerrarSesion) {
         AlertDialog(
             onDismissRequest = { mostrarConfirmacionCerrarSesion = false },
@@ -266,7 +283,7 @@ fun MiInventarioScreen(
         )
     }
 
-    // Modal de confirmacion para eliminar un articulo propio (RF-22)
+    // Cuadro de diálogo de confirmación antes de eliminar un artículo propio (RF-22)
     if (productoAEliminar != null) {
         AlertDialog(
             onDismissRequest = { productoAEliminar = null },
@@ -313,16 +330,29 @@ fun MiInventarioScreen(
         perfilUsuario?.barrio?.takeIf { it.isNotBlank() }
     ).joinToString(" - ").ifEmpty { "Cajamarca" } + ", Perú"
 
+    // Usamos contentWindowInsets = WindowInsets(0, 0, 0, 0) para eliminar el espacio superior en blanco
     Scaffold(
         containerColor = OffWhiteBackground,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        bottomBar = {
+            // Barra inferior presente en el perfil con "Perfil" iluminado en verde
+            CambiazoBottomNavigationBar(
+                seccionActiva = "perfil",
+                totalNoLeidos = totalNoLeidos,
+                onHomeClick = onIrAInicio,
+                onSearchClick = onIrAInicio,
+                onPostClick = onIrAPublicar,
+                onActivityClick = onIrAActividad,
+                onProfileClick = {}
+            )
+        },
         floatingActionButton = {
             if (tabSeleccionado == 0) {
                 FloatingActionButton(
                     onClick = onIrAPublicar,
                     containerColor = EmeraldPrimary,
                     contentColor = Color.White,
-                    shape = CircleShape,
-                    modifier = Modifier.navigationBarsPadding()
+                    shape = CircleShape
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
@@ -337,42 +367,45 @@ fun MiInventarioScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .statusBarsPadding()
-                .navigationBarsPadding()
         ) {
-            // 1. Barra Superior con marca Cambiazo y botón de Cerrar Sesión con confirmación
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(PureWhiteSurface)
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // 1. Barra Superior pegada al borde superior con marca Cambiazo y botón de Cerrar Sesión
+            Surface(
+                color = PureWhiteSurface,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                IconButton(onClick = onVolver) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Volver al Home",
-                        tint = DarkSlateText
-                    )
-                }
-
-                Text(
-                    text = "Cambiazo",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = DeepGreenBrand
-                )
-
-                // Boton Cerrar Sesion (abre dialogo de confirmacion)
-                IconButton(
-                    onClick = { mostrarConfirmacionCerrarSesion = true }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Logout,
-                        contentDescription = "Cerrar sesión",
-                        tint = ErrorRed
+                    IconButton(onClick = onVolver) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Volver",
+                            tint = DarkSlateText
+                        )
+                    }
+
+                    Text(
+                        text = "Cambiazo",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = DeepGreenBrand
                     )
+
+                    // Botón Cerrar Sesión con confirmación
+                    IconButton(
+                        onClick = { mostrarConfirmacionCerrarSesion = true }
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Logout,
+                            contentDescription = "Cerrar sesión",
+                            tint = ErrorRed
+                        )
+                    }
                 }
             }
 
@@ -390,17 +423,17 @@ fun MiInventarioScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(PureWhiteSurface)
-                            .padding(top = 12.dp),
+                            .padding(top = 8.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Avatar circular con foto real (o inicial) y boton de camara para editar
+                        // Avatar circular con foto real (o inicial) y botón de cámara para editar
                         Box(
                             contentAlignment = Alignment.BottomEnd,
                             modifier = Modifier.clickable { mostrarEditarPerfil = true }
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(98.dp)
+                                    .size(96.dp)
                                     .clip(CircleShape)
                                     .background(LightGreenTint)
                                     .border(3.dp, EmeraldPrimary, CircleShape),
@@ -462,7 +495,7 @@ fun MiInventarioScreen(
 
                         Spacer(modifier = Modifier.height(4.dp))
 
-                        // Ubicacion del usuario
+                        // Ubicación del usuario
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = Icons.Default.LocationOn,
@@ -478,7 +511,6 @@ fun MiInventarioScreen(
                             )
                         }
 
-                        // Telefono o biografia si el usuario los agrego
                         if (!perfilUsuario?.telefono.isNullOrBlank()) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -511,7 +543,7 @@ fun MiInventarioScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Boton de Editar Perfil
+                        // Botón de Editar Perfil
                         OutlinedButton(
                             onClick = { mostrarEditarPerfil = true },
                             shape = RoundedCornerShape(20.dp),
@@ -535,7 +567,7 @@ fun MiInventarioScreen(
 
                         Spacer(modifier = Modifier.height(14.dp))
 
-                        // Tarjeta de Reputación (4.9 ★)
+                        // Tarjeta de Reputación Real (RF-11)
                         Surface(
                             shape = RoundedCornerShape(16.dp),
                             color = OffWhiteBackground,
@@ -547,7 +579,7 @@ fun MiInventarioScreen(
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        text = "4.9",
+                                        text = "%.1f".format(promedioReal),
                                         fontSize = 22.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = EmeraldPrimary
@@ -587,7 +619,7 @@ fun MiInventarioScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Nivel: Truequeador Experto",
+                                    text = "Nivel: $nivelGamificacion",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = DeepGreenBrand
@@ -639,7 +671,7 @@ fun MiInventarioScreen(
                                 onClick = { tabSeleccionado = 2 },
                                 text = {
                                     Text(
-                                        text = "Reseñas",
+                                        text = "Reseñas (${misResenas.size})",
                                         fontSize = 13.sp,
                                         fontWeight = if (tabSeleccionado == 2) FontWeight.Bold else FontWeight.Medium,
                                         color = if (tabSeleccionado == 2) DeepGreenBrand else MutedText
@@ -650,9 +682,7 @@ fun MiInventarioScreen(
                     }
                 }
 
-                // =============================================================
-                // PESTAÑA 0: MI INVENTARIO (RF-22)
-                // =============================================================
+                // Pestaña 0: Mi Inventario (RF-22)
                 if (tabSeleccionado == 0) {
                     if (productos.isEmpty()) {
                         item(span = { GridItemSpan(2) }) {
@@ -693,9 +723,7 @@ fun MiInventarioScreen(
                         }
                     }
                 }
-                // =============================================================
-                // PESTAÑA 1: HISTORIAL DE TRUEQUES COMPLETADOS (RF-24)
-                // =============================================================
+                // Pestaña 1: Historial de Trueques Completados (RF-24)
                 else if (tabSeleccionado == 1) {
                     if (historialCompletados.isEmpty()) {
                         item(span = { GridItemSpan(2) }) {
@@ -721,7 +749,7 @@ fun MiInventarioScreen(
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "Cuando confirmes un intercambio en la sección Activity, aparecerá en tu historial.",
+                                    text = "Cuando confirmes un intercambio en la sección Trueques, aparecerá en tu historial.",
                                     fontSize = 13.sp,
                                     color = MutedText,
                                     textAlign = TextAlign.Center
@@ -738,9 +766,7 @@ fun MiInventarioScreen(
                         }
                     }
                 }
-                // =============================================================
-                // PESTAÑA 2: RESEÑAS Y REPUTACIÓN (RF-24 / RF-26 / RF-27)
-                // =============================================================
+                // Pestaña 2: Reseñas y Reputación (RF-24 / RF-26 / RF-27)
                 else {
                     item(span = { GridItemSpan(2) }) {
                         Column(
@@ -749,7 +775,6 @@ fun MiInventarioScreen(
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            // Chips de aspectos destacados (RF-27)
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(18.dp),
@@ -793,19 +818,18 @@ fun MiInventarioScreen(
                                 }
                             }
 
-                            // Reseñas verificadas de la comunidad
-                            TarjetaResenaComunidad(
-                                autor = "Carlos M.",
-                                calificacion = 5,
-                                comentario = "Excelente trueque, muy puntual en el punto de encuentro y el artículo estaba impecable tal como en las fotos.",
-                                etiqueta = "Puntual • Buena comunicación"
-                            )
-                            TarjetaResenaComunidad(
-                                autor = "Ana R.",
-                                calificacion = 5,
-                                comentario = "Trato súper amable y rápido. 100% recomendado para hacer cambiazos en Cajamarca.",
-                                etiqueta = "Amigable • Producto como se describía"
-                            )
+                            if (misResenas.isEmpty()) {
+                                TarjetaResenaComunidad(
+                                    autor = "Comunidad Cambiazo",
+                                    calificacion = 5,
+                                    comentario = "Usuario verificado y activo en la comunidad de trueques de Cajamarca.",
+                                    etiqueta = "Puntual • Producto como se describía"
+                                )
+                            } else {
+                                misResenas.forEach { resena ->
+                                    TarjetaResenaReal(resena = resena)
+                                }
+                            }
                         }
                     }
                 }
@@ -814,9 +838,7 @@ fun MiInventarioScreen(
     }
 }
 
-/**
- * Formulario completo para editar el Perfil del Usuario (Foto real, Nombre, Ciudad, Barrio, Telefono y Biografia).
- */
+// Formulario para editar el perfil del usuario (foto real, nombre, ciudad, barrio, teléfono y biografía)
 @Composable
 fun EditarPerfilForm(
     usuarioActual: Usuario,
@@ -839,7 +861,6 @@ fun EditarPerfilForm(
     var nuevaFotoUri by remember { mutableStateOf<Uri?>(null) }
     var errorValidacion by remember { mutableStateOf("") }
 
-    // Selector de foto de perfil desde la galeria del dispositivo
     val selectorFotoPerfil = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
@@ -881,7 +902,6 @@ fun EditarPerfilForm(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Selector visual de Foto de Perfil
         Box(
             contentAlignment = Alignment.BottomEnd,
             modifier = Modifier.clickable {
@@ -1101,10 +1121,7 @@ fun EditarPerfilForm(
     }
 }
 
-/**
- * Formulario completo para editar un artículo propio incluyendo sus fotografías y portada (RF-22 + RF-19).
- * Valida que no se pueda guardar si no hay al menos 1 imagen o si algún campo obligatorio está vacío.
- */
+// Formulario para editar un artículo propio incluyendo sus fotografías y portada (RF-22 + RF-19)
 @Composable
 fun EditarProductoForm(
     producto: Producto,
@@ -1118,8 +1135,6 @@ fun EditarProductoForm(
     var estado by remember { mutableStateOf(producto.estado) }
     var interesesCambio by remember { mutableStateOf(producto.interesesCambio) }
 
-    // Lista mixta de imagenes: inicia con las imagenes actuales del producto (String)
-    // y permite borrar cualquiera o agregar nuevas de la galeria (Uri)
     val listaImagenesEditar = remember {
         val iniciales = producto.imagenes.ifEmpty {
             if (producto.imagenUrl.isNotBlank()) listOf(producto.imagenUrl) else emptyList()
@@ -1132,7 +1147,6 @@ fun EditarProductoForm(
     var estadoExpandido by remember { mutableStateOf(false) }
     var errorEditar by remember { mutableStateOf("") }
 
-    // Selector para agregar nuevas fotos desde la galeria al editar
     val selectorNuevasFotos = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 5)
     ) { uris ->
@@ -1189,7 +1203,6 @@ fun EditarProductoForm(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // SECCIÓN DE EDICIÓN DE FOTOGRAFÍAS Y PORTADA
         Text(
             text = "Fotografías del artículo (${listaImagenesEditar.size}/5) *",
             fontSize = 14.sp,
@@ -1229,7 +1242,6 @@ fun EditarProductoForm(
                         modifier = Modifier.fillMaxSize()
                     )
 
-                    // Boton 'X' para borrar esta imagen
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
@@ -1253,7 +1265,6 @@ fun EditarProductoForm(
                         )
                     }
 
-                    // Etiqueta inferior de Portada
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -1276,7 +1287,6 @@ fun EditarProductoForm(
                 }
             }
 
-            // Tarjeta para agregar nuevas fotos si hay menos de 5
             if (listaImagenesEditar.size < 5) {
                 item {
                     Box(
@@ -1322,7 +1332,6 @@ fun EditarProductoForm(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // CAMPOS DEL ARTÍCULO CON VALIDACIÓN
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(22.dp),
@@ -1362,7 +1371,6 @@ fun EditarProductoForm(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Selector de categoría
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1406,7 +1414,6 @@ fun EditarProductoForm(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Selector de estado
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1475,7 +1482,6 @@ fun EditarProductoForm(
 
                 Button(
                     onClick = {
-                        // Validaciones estrictas antes de permitir guardar
                         if (listaImagenesEditar.isEmpty()) {
                             errorEditar = "Debes mantener o subir al menos 1 fotografía del artículo."
                             return@Button

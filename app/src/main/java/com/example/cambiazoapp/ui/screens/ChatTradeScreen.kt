@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -74,7 +75,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -105,10 +105,12 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+// Modelo auxiliar para los puntos de encuentro sugeridos (RF-18)
 data class PuntoSeguroSugerido(
     val nombre: String,
     val direccion: String,
@@ -116,10 +118,7 @@ data class PuntoSeguroSugerido(
     val longitud: Double
 )
 
-/**
- * Pantalla 6: Chat de Negociacion en Tiempo Real (RF-16), Mapa de Puntos Seguros (RF-18)
- * y Pantalla 9: Modal de Calificacion Bilateral (RF-25, RF-26, RF-27).
- */
+// Pantalla 6: Chat en Tiempo Real (RF-16), Mapa de Puntos Seguros (RF-18) y Calificación (RF-25)
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ChatTradeScreen(
@@ -131,16 +130,7 @@ fun ChatTradeScreen(
     val context = LocalContext.current
     val usuarioActualId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
 
-    // Inicializar configuracion de OpenStreetMap (osmdroid) para el mapa real (RF-18)
-    LaunchedEffect(Unit) {
-        Configuration.getInstance().load(
-            context,
-            PreferenceManager.getDefaultSharedPreferences(context)
-        )
-        Configuration.getInstance().userAgentValue = context.packageName
-    }
-
-    // Iniciar y detener la escucha en tiempo real del chat al entrar/salir de la pantalla (RF-16)
+    // Iniciar escucha en tiempo real del intercambio y sus mensajes al abrir la pantalla (RF-16)
     DisposableEffect(intercambioId, usuarioActualId) {
         viewModel.iniciarChatTiempoReal(intercambioId, usuarioActualId)
         onDispose {
@@ -158,7 +148,7 @@ fun ChatTradeScreen(
 
     val listState = rememberLazyListState()
 
-    // Desplazar automaticamente al ultimo mensaje cuando llega un mensaje nuevo (RF-16)
+    // Hacer scroll automático hacia el último mensaje recibido o enviado (RF-16)
     LaunchedEffect(mensajes.size) {
         if (mensajes.isNotEmpty()) {
             listState.animateScrollToItem(mensajes.size - 1)
@@ -178,6 +168,7 @@ fun ChatTradeScreen(
         return
     }
 
+    // Identificar el rol del usuario actual dentro de la negociación
     val soySolicitante = usuarioActualId == inter.usuarioSolicitanteId
     val otroUsuarioId = if (soySolicitante) inter.usuarioPropietarioId else inter.usuarioSolicitanteId
     val otroUsuarioNombre = if (soySolicitante) {
@@ -186,15 +177,14 @@ fun ChatTradeScreen(
         inter.usuarioSolicitanteNombre
     }
 
+    // Verificar si el usuario actual ya calificó este trueque (RF-25: 1 sola vez)
     val yaCalifiqueEsteTrueque = if (soySolicitante) {
         inter.calificadoPorSolicitante
     } else {
         inter.calificadoPorPropietario
     }
 
-    // =========================================================================
-    // MODAL RF-18: PROPONER / VISUALIZAR PUNTO DE ENCUENTRO SEGURO EN MAPA REAL
-    // =========================================================================
+    // Modal de Mapa Real para proponer o ver el Punto de Encuentro Seguro (RF-18)
     if (mostrarModalMapa) {
         ModalPuntoEncuentroMapa(
             intercambio = inter,
@@ -217,9 +207,7 @@ fun ChatTradeScreen(
         )
     }
 
-    // =========================================================================
-    // PANTALLA 9 (MODAL RF-25, RF-26, RF-27): EVALUACIÓN BILATERAL DE TRUEQUE
-    // =========================================================================
+    // Modal de Evaluación Bilateral de 1 a 5 estrellas (RF-25, RF-26, RF-27)
     if (mostrarModalCalificar) {
         ModalCalificarTrueque(
             otroUsuarioNombre = otroUsuarioNombre,
@@ -245,10 +233,12 @@ fun ChatTradeScreen(
         )
     }
 
+    // Usamos contentWindowInsets = WindowInsets(0, 0, 0, 0) para eliminar el espacio blanco superior
     Scaffold(
         containerColor = OffWhiteBackground,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            // Barra inferior de escritura de mensajes en tiempo real + Boton de Mapa (RF-16 y RF-18)
+            // Barra inferior para escribir mensajes y abrir el mapa (RF-16 y RF-18)
             Surface(
                 color = PureWhiteSurface,
                 shadowElevation = 12.dp,
@@ -263,7 +253,7 @@ fun ChatTradeScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Boton para abrir el Mapa de Puntos de Encuentro Seguros (RF-18)
+                    // Botón de ubicación para abrir el mapa real (RF-18)
                     Surface(
                         shape = CircleShape,
                         color = LightGreenTint,
@@ -282,6 +272,7 @@ fun ChatTradeScreen(
                         }
                     }
 
+                    // Campo de texto del mensaje
                     OutlinedTextField(
                         value = textoMensaje,
                         onValueChange = { textoMensaje = it },
@@ -303,7 +294,7 @@ fun ChatTradeScreen(
                         modifier = Modifier.weight(1f)
                     )
 
-                    // Boton de enviar mensaje en tiempo real (RF-16)
+                    // Botón para enviar el mensaje en tiempo real (RF-16)
                     Surface(
                         shape = CircleShape,
                         color = if (textoMensaje.isNotBlank()) EmeraldPrimary else InputBorder,
@@ -331,9 +322,8 @@ fun ChatTradeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .statusBarsPadding()
         ) {
-            // 1. Cabecera del Chat con acceso al Perfil Público del otro usuario (RF-11)
+            // 1. Cabecera superior pegada al borde superior con color blanco uniforme
             Surface(
                 color = PureWhiteSurface,
                 shadowElevation = 2.dp,
@@ -342,6 +332,7 @@ fun ChatTradeScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .statusBarsPadding()
                         .padding(horizontal = 10.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
@@ -378,7 +369,7 @@ fun ChatTradeScreen(
 
                         Spacer(modifier = Modifier.width(10.dp))
 
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = otroUsuarioNombre,
                                 fontSize = 16.sp,
@@ -391,12 +382,16 @@ fun ChatTradeScreen(
                                 text = "Toca para ver su perfil y reputación ★",
                                 fontSize = 11.sp,
                                 color = DeepGreenBrand,
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
 
-                    // Boton rapido en cabecera para ver/proponer Punto Seguro en Mapa (RF-18)
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    // Botón rápido para abrir el Mapa de Puntos Seguros (RF-18)
                     Surface(
                         shape = RoundedCornerShape(16.dp),
                         color = LightGreenTint,
@@ -426,11 +421,12 @@ fun ChatTradeScreen(
                 }
             }
 
-            // 2. Tarjeta Fija de Estado del Trueque y Punto de Encuentro Acordado (Mockup Pantalla 6)
+            // 2. Tarjeta fija de resumen de la propuesta y punto de encuentro acordado
             TarjetaResumenNegociacionFija(
                 intercambio = inter,
                 soySolicitante = soySolicitante,
                 yaCalifique = yaCalifiqueEsteTrueque,
+                usuarioActualId = usuarioActualId,
                 onAceptarPropuesta = {
                     viewModel.cambiarEstadoPropuesta(inter.id, "Aceptada", usuarioActualId)
                 },
@@ -449,11 +445,10 @@ fun ChatTradeScreen(
                 },
                 onConfirmarPuntoEncuentro = {
                     viewModel.confirmarPuntoEncuentro(usuarioActualId)
-                },
-                usuarioActualId = usuarioActualId
+                }
             )
 
-            // 3. Historial de Mensajes en Tiempo Real (RF-16)
+            // 3. Listado de mensajes en tiempo real (RF-16)
             LazyColumn(
                 state = listState,
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
@@ -462,7 +457,7 @@ fun ChatTradeScreen(
                     .fillMaxWidth()
                     .weight(1f)
             ) {
-                // Aviso de seguridad de Cambiazo (Mockup Pantalla 6)
+                // Aviso de seguridad de Cambiazo
                 item {
                     Surface(
                         shape = RoundedCornerShape(14.dp),
@@ -502,11 +497,7 @@ fun ChatTradeScreen(
     }
 }
 
-/**
- * Tarjeta superior fija dentro del chat (Mockup Pantalla 6: Chat y Estado de Trueque).
- * Muestra los 2 articulos, el estado actual, el punto de encuentro acordado en el mapa
- * y los botones para Aceptar, Completar o Calificar el trueque.
- */
+// Tarjeta superior fija con el estado de la propuesta y el punto de encuentro (RF-17 y RF-18)
 @Composable
 fun TarjetaResumenNegociacionFija(
     intercambio: Intercambio,
@@ -538,63 +529,57 @@ fun TarjetaResumenNegociacionFija(
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    CambiazoImagen(
-                        imagenData = intercambio.productoOfrecidoImagen,
-                        contentDescription = intercambio.productoOfrecidoNombre,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Icon(
-                        imageVector = Icons.Default.SwapHoriz,
-                        contentDescription = null,
-                        tint = EmeraldPrimary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    CambiazoImagen(
-                        imagenData = intercambio.productoSolicitadoImagen,
-                        contentDescription = intercambio.productoSolicitadoNombre,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = colorBadge.copy(alpha = 0.15f)
-                        ) {
-                            Text(
-                                text = textoEstado,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = colorBadge,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(2.dp))
+                CambiazoImagen(
+                    imagenData = intercambio.productoOfrecidoImagen,
+                    contentDescription = intercambio.productoOfrecidoNombre,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Icon(
+                    imageVector = Icons.Default.SwapHoriz,
+                    contentDescription = null,
+                    tint = EmeraldPrimary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                CambiazoImagen(
+                    imagenData = intercambio.productoSolicitadoImagen,
+                    contentDescription = intercambio.productoSolicitadoNombre,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = colorBadge.copy(alpha = 0.15f)
+                    ) {
                         Text(
-                            text = "${intercambio.productoOfrecidoNombre} ⇄ ${intercambio.productoSolicitadoNombre}",
-                            fontSize = 12.sp,
+                            text = textoEstado,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = DarkSlateText,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            color = colorBadge,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                         )
                     }
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "${intercambio.productoOfrecidoNombre} ⇄ ${intercambio.productoSolicitadoNombre}",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = DarkSlateText,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
 
-            // RF-18: Mostrar el Punto de Encuentro Propuesto o Acordado visible para ambos usuarios
+            // Mostrar punto de encuentro propuesto o acordado visible para ambos (RF-18)
             if (intercambio.puntoEncuentroNombre.isNotBlank()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Surface(
@@ -640,7 +625,6 @@ fun TarjetaResumenNegociacionFija(
                             }
                         }
 
-                        // Si el otro usuario propuso el punto y aun no esta confirmado, mostrar boton "Aceptar punto"
                         if (!intercambio.puntoEncuentroConfirmado &&
                             intercambio.puntoEncuentroPropuestoPor.isNotBlank() &&
                             intercambio.puntoEncuentroPropuestoPor != usuarioActualId
@@ -659,7 +643,7 @@ fun TarjetaResumenNegociacionFija(
                 }
             }
 
-            // Botones de acción según el estado de la propuesta (RF-17 y RF-25)
+            // Botones de acción según el estado actual de la propuesta
             when (intercambio.estado) {
                 "Pendiente" -> {
                     if (!soySolicitante) {
@@ -753,9 +737,7 @@ fun TarjetaResumenNegociacionFija(
     }
 }
 
-/**
- * Burbuja individual de mensaje o tarjeta de Punto de Encuentro en el Chat (Mockup Pantalla 6).
- */
+// Burbuja de mensaje del chat o tarjeta interactiva de Punto de Encuentro (RF-16 y RF-18)
 @Composable
 fun BurbujaMensajeChat(
     mensaje: MensajeChat,
@@ -767,7 +749,6 @@ fun BurbujaMensajeChat(
         if (mensaje.timestamp > 0L) formatoHora.format(Date(mensaje.timestamp)) else ""
     }
 
-    // Si es un mensaje del sistema (confirmacion)
     if (mensaje.remitenteId.isBlank()) {
         Box(
             modifier = Modifier
@@ -796,7 +777,6 @@ fun BurbujaMensajeChat(
         horizontalAlignment = if (esMio) Alignment.End else Alignment.Start
     ) {
         if (mensaje.esPuntoEncuentro) {
-            // Tarjeta especial con vista de Punto de Encuentro Seguro en el chat (RF-18)
             Card(
                 modifier = Modifier
                     .widthIn(max = 290.dp)
@@ -853,7 +833,6 @@ fun BurbujaMensajeChat(
                 }
             }
         } else {
-            // Burbuja de texto normal (RF-16)
             Surface(
                 shape = RoundedCornerShape(
                     topStart = 18.dp,
@@ -884,10 +863,7 @@ fun BurbujaMensajeChat(
     }
 }
 
-/**
- * Modal con Mapa Real Interactivo (OpenStreetMap) para proponer y visualizar
- * Puntos de Encuentro Seguros dentro de la negociacion (Cumple con RF-18).
- */
+// Modal con Mapa Real corregido sin error 403 (inicializa el User-Agent síncronamente antes de crear el MapView)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModalPuntoEncuentroMapa(
@@ -895,7 +871,18 @@ fun ModalPuntoEncuentroMapa(
     onDismiss: () -> Unit,
     onEnviarPunto: (String, String, Double, Double) -> Unit
 ) {
-    // Lista de Puntos Seguros concurridos en Cajamarca
+    val context = LocalContext.current
+
+    // Configurar User-Agent válido y caché antes de renderizar el mapa para evitar bloqueo 403 de OpenStreetMap
+    remember {
+        val config = Configuration.getInstance()
+        config.load(context, PreferenceManager.getDefaultSharedPreferences(context))
+        config.userAgentValue = "CambiazoApp-Peru-UPN/1.0 (Android; Cajamarca)"
+        config.osmdroidBasePath = File(context.cacheDir, "osmdroid")
+        config.osmdroidTileCache = File(context.cacheDir, "osmdroid/tiles")
+        true
+    }
+
     val puntosSeguros = remember {
         listOf(
             PuntoSeguroSugerido(
@@ -917,16 +904,16 @@ fun ModalPuntoEncuentroMapa(
                 -78.5051
             ),
             PuntoSeguroSugerido(
-                "Plazuela Belén",
-                "Jr. Belén - Centro de Cajamarca",
-                -7.1639,
-                -78.5142
-            ),
-            PuntoSeguroSugerido(
                 "Campus UPN Cajamarca",
                 "Av. Vía de Evitamiento Norte - Entrada principal",
                 -7.1489,
                 -78.5065
+            ),
+            PuntoSeguroSugerido(
+                "Plazuela Belén",
+                "Jr. Belén - Centro de Cajamarca",
+                -7.1639,
+                -78.5142
             )
         )
     }
@@ -972,7 +959,7 @@ fun ModalPuntoEncuentroMapa(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Punto de Encuentro Seguro",
                         fontSize = 20.sp,
@@ -992,7 +979,7 @@ fun ModalPuntoEncuentroMapa(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Chips de Puntos Seguros recomendados
+            // Chips horizontales con los lugares seguros sugeridos
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth()
@@ -1033,20 +1020,23 @@ fun ModalPuntoEncuentroMapa(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // MAPA REAL INTERACTIVO (OpenStreetMap AndroidView - RF-18)
+            // Mapa interactivo real de OpenStreetMap con limpieza de tiles cacheados con error 403
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(250.dp)
+                    .height(255.dp)
                     .clip(RoundedCornerShape(18.dp))
                     .border(1.5.dp, EmeraldPrimary, RoundedCornerShape(18.dp))
             ) {
                 AndroidView(
                     factory = { ctx ->
+                        // Asegurar User-Agent antes de instanciar MapView
+                        Configuration.getInstance().userAgentValue = "CambiazoApp-Peru-UPN/1.0 (Android; Cajamarca)"
                         MapView(ctx).apply {
                             setTileSource(TileSourceFactory.MAPNIK)
                             setMultiTouchControls(true)
-                            controller.setZoom(16.5)
+                            tileProvider.clearTileCache()
+                            controller.setZoom(16.8)
                             controller.setCenter(GeoPoint(latSeleccionada, lngSeleccionada))
                         }
                     },
@@ -1055,14 +1045,14 @@ fun ModalPuntoEncuentroMapa(
                         mapView.controller.animateTo(geoPoint)
                         mapView.overlays.clear()
 
-                        // Permitir que el usuario toque cualquier parte del mapa para mover el pin
+                        // Permitir tocar cualquier calle del mapa para ubicar el pin
                         val receptorToques = object : MapEventsReceiver {
                             override fun singleTapConfirmedHelper(p: GeoPoint?): Boolean {
                                 if (p != null) {
                                     latSeleccionada = p.latitude
                                     lngSeleccionada = p.longitude
-                                    nombreSeleccionado = "Punto personalizado en el mapa"
-                                    direccionSeleccionada = "Coord: %.4f, %.4f".format(p.latitude, p.longitude)
+                                    nombreSeleccionado = "Punto seleccionado en el mapa"
+                                    direccionSeleccionada = "Cajamarca (%.4f, %.4f)".format(p.latitude, p.longitude)
                                 }
                                 return true
                             }
@@ -1071,7 +1061,7 @@ fun ModalPuntoEncuentroMapa(
                         }
                         mapView.overlays.add(MapEventsOverlay(receptorToques))
 
-                        // Pin marcador en la ubicacion elegida
+                        // Marcador visual en la coordenada seleccionada
                         val marker = Marker(mapView).apply {
                             position = geoPoint
                             setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
@@ -1079,6 +1069,7 @@ fun ModalPuntoEncuentroMapa(
                             snippet = direccionSeleccionada
                         }
                         mapView.overlays.add(marker)
+                        marker.showInfoWindow()
                         mapView.invalidate()
                     },
                     modifier = Modifier.fillMaxSize()
@@ -1087,25 +1078,37 @@ fun ModalPuntoEncuentroMapa(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Tarjeta con los datos del punto seleccionado
+            // Resumen de la dirección seleccionada debajo del mapa
             Surface(
                 shape = RoundedCornerShape(14.dp),
                 color = InputBackground,
                 border = BorderStroke(1.dp, InputBorder),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = nombreSeleccionado,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = DarkSlateText
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LocationOn,
+                        contentDescription = null,
+                        tint = DeepGreenBrand,
+                        modifier = Modifier.size(22.dp)
                     )
-                    Text(
-                        text = direccionSeleccionada,
-                        fontSize = 12.sp,
-                        color = MutedText
-                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            text = nombreSeleccionado,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = DarkSlateText
+                        )
+                        Text(
+                            text = direccionSeleccionada,
+                            fontSize = 12.sp,
+                            color = MutedText
+                        )
+                    }
                 }
             }
 
@@ -1140,10 +1143,7 @@ fun ModalPuntoEncuentroMapa(
     }
 }
 
-/**
- * Pantalla 9: Modal de Calificación de Trueque (Cumple con RF-25, RF-26 y RF-27).
- * Permite calificar de 1 a 5 estrellas, elegir chips predefinidos y escribir una reseña.
- */
+// Pantalla 9: Modal de Calificación Bilateral de 1 a 5 estrellas (RF-25, RF-26 y RF-27)
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ModalCalificarTrueque(
@@ -1157,7 +1157,6 @@ fun ModalCalificarTrueque(
     var comentario by remember { mutableStateOf("") }
     var errorValidacion by remember { mutableStateOf("") }
 
-    // RF-27: Chips seleccionables con aspectos destacados del encuentro
     val opcionesEtiquetas = listOf(
         "Puntual",
         "Amigable",
@@ -1184,7 +1183,6 @@ fun ModalCalificarTrueque(
                 .padding(horizontal = 24.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Icono de exito superior (Mockup Pantalla 9)
             Box(
                 modifier = Modifier
                     .size(64.dp)
@@ -1218,7 +1216,7 @@ fun ModalCalificarTrueque(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // Selector interactivo de 1 a 5 Estrellas (RF-26)
+            // Estrellas seleccionables de 1 a 5 (RF-26)
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -1238,7 +1236,6 @@ fun ModalCalificarTrueque(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // Chips de aspectos destacados (RF-27)
             Text(
                 text = "¿Qué destacarías del encuentro?",
                 fontSize = 14.sp,
@@ -1277,7 +1274,6 @@ fun ModalCalificarTrueque(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // Comentario sobre el trueque (RF-26)
             OutlinedTextField(
                 value = comentario,
                 onValueChange = {
