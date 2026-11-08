@@ -109,6 +109,8 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import org.osmdroid.tileprovider.tilesource.XYTileSource
+import org.osmdroid.util.MapTileIndex
 
 // Modelo auxiliar para los puntos de encuentro sugeridos (RF-18)
 data class PuntoSeguroSugerido(
@@ -863,7 +865,7 @@ fun BurbujaMensajeChat(
     }
 }
 
-// Modal con Mapa Real corregido sin error 403 (inicializa el User-Agent síncronamente antes de crear el MapView)
+// Modal con Mapa Real corregido con servidor CDN y caché nueva para eliminar el error 403 (RF-18)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModalPuntoEncuentroMapa(
@@ -873,15 +875,31 @@ fun ModalPuntoEncuentroMapa(
 ) {
     val context = LocalContext.current
 
-    // Configurar User-Agent válido y caché antes de renderizar el mapa para evitar bloqueo 403 de OpenStreetMap
-    remember {
-        val config = Configuration.getInstance()
-        config.load(context, PreferenceManager.getDefaultSharedPreferences(context))
-        config.userAgentValue = "CambiazoApp-Peru-UPN/1.0 (Android; Cajamarca)"
-        config.osmdroidBasePath = File(context.cacheDir, "osmdroid")
-        config.osmdroidTileCache = File(context.cacheDir, "osmdroid/tiles")
-        true
+    // Fuente de mapas OSM vía CDN Carto Voyager (alta velocidad, diseño limpio y sin bloqueo 403)
+    /*
+    val fuenteMapaSeguro = remember {
+        object : XYTileSource(
+            "CartoVoyagerOSM",
+            0,
+            19,
+            256,
+            ".png",
+            arrayOf(
+                "https://a.basemaps.cartocdn.com/rastertiles/voyager/",
+                "https://b.basemaps.cartocdn.com/rastertiles/voyager/",
+                "https://c.basemaps.cartocdn.com/rastertiles/voyager/"
+            )
+        ) {
+            override fun getTileURLString(pMapTileIndex: Long): String {
+                return baseUrl +
+                        MapTileIndex.getZoom(pMapTileIndex) + "/" +
+                        MapTileIndex.getX(pMapTileIndex) + "/" +
+                        MapTileIndex.getY(pMapTileIndex) + mImageFilenameEnding
+            }
+        }
     }
+
+     */
 
     val puntosSeguros = remember {
         listOf(
@@ -1020,7 +1038,8 @@ fun ModalPuntoEncuentroMapa(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Mapa interactivo real de OpenStreetMap con limpieza de tiles cacheados con error 403
+            // Mapa interactivo real con carpeta de caché limpia (osmdroid_v2) y cabeceras HTTP válidas
+            /*
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1030,13 +1049,108 @@ fun ModalPuntoEncuentroMapa(
             ) {
                 AndroidView(
                     factory = { ctx ->
-                        // Asegurar User-Agent antes de instanciar MapView
-                        Configuration.getInstance().userAgentValue = "CambiazoApp-Peru-UPN/1.0 (Android; Cajamarca)"
+                        val config = Configuration.getInstance()
+                        // Carpeta de caché nueva para no leer ni el 403 antiguo ni el cartel de Carto
+                        val carpetaCacheLimpia = File(ctx.cacheDir, "osmdroid_osm_clean")
+                        carpetaCacheLimpia.mkdirs()
+                        config.osmdroidBasePath = carpetaCacheLimpia
+                        config.osmdroidTileCache = File(carpetaCacheLimpia, "tiles")
+
+                        // OpenStreetMap exige únicamente el packageName real de la app y sin cabeceras extra
+                        config.userAgentValue = ctx.packageName
+                        config.additionalHttpRequestProperties.clear()
+
                         MapView(ctx).apply {
+                            // Servidor oficial gratuito de OpenStreetMap (No requiere API Key)
                             setTileSource(TileSourceFactory.MAPNIK)
                             setMultiTouchControls(true)
-                            tileProvider.clearTileCache()
                             controller.setZoom(16.8)
+                            controller.setCenter(GeoPoint(latSeleccionada, lngSeleccionada))
+                        }
+                    },
+                    update = { mapView ->
+                        val geoPoint = GeoPoint(latSeleccionada, lngSeleccionada)
+                        mapView.controller.animateTo(geoPoint)
+                        mapView.overlays.clear()
+
+                        // Permitir tocar cualquier calle del mapa para ubicar el pin
+                        val receptorToques = object : MapEventsReceiver {
+                            override fun singleTapConfirmedHelper(p: GeoPoint?): Boolean {
+                                if (p != null) {
+                                    latSeleccionada = p.latitude
+                                    lngSeleccionada = p.longitude
+                                    nombreSeleccionado = "Punto seleccionado en el mapa"
+                                    direccionSeleccionada = "Cajamarca (%.4f, %.4f)".format(p.latitude, p.longitude)
+                                }
+                                return true
+                            }
+
+                            override fun longPressHelper(p: GeoPoint?): Boolean = false
+                        }
+                        mapView.overlays.add(MapEventsOverlay(receptorToques))
+
+                        // Marcador visual en la coordenada seleccionada
+                        val marker = Marker(mapView).apply {
+                            position = geoPoint
+                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                            title = nombreSeleccionado
+                            snippet = direccionSeleccionada
+                        }
+                        mapView.overlays.add(marker)
+                        marker.showInfoWindow()
+                        mapView.invalidate()
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            */
+            // Mapa interactivo real de OpenStreetMap (RF-18)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(255.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .border(1.5.dp, EmeraldPrimary, RoundedCornerShape(18.dp))
+            ) {
+                AndroidView(
+                    factory = { ctx ->
+                        val config = Configuration.getInstance()
+                        config.load(ctx, PreferenceManager.getDefaultSharedPreferences(ctx))
+
+                        // 1. Identificación única, válida y sin "com.example" (Cumple política de OSM)
+                        config.userAgentValue = "CambiazoPeruApp/1.0 (https://github.com/kevin-158/Cambiazo-Plataforma-De-Intercambio; contacto@upn.pe)"
+                        config.additionalHttpRequestProperties.clear()
+
+                        // 2. Limitar hilos de descarga para cumplir con el "Rate Limit" de OSM
+                        config.tileDownloadThreads = 2
+                        config.tileDownloadMaxQueueSize = 20
+
+                        // 3. Fuente oficial OpenStreetMap ( Espejo OSM-FR + OSM.org sin bloqueo ni API Key )
+                        val fuenteOsmReal = object : XYTileSource(
+                            "OpenStreetMap_Cambiazo_V3",
+                            1,
+                            19,
+                            256,
+                            ".png",
+                            arrayOf(
+                                "https://a.tile.openstreetmap.fr/osmfr/",
+                                "https://b.tile.openstreetmap.fr/osmfr/",
+                                "https://c.tile.openstreetmap.fr/osmfr/"
+                            )
+                        ) {
+                            override fun getTileURLString(pMapTileIndex: Long): String {
+                                return baseUrl +
+                                        MapTileIndex.getZoom(pMapTileIndex) + "/" +
+                                        MapTileIndex.getX(pMapTileIndex) + "/" +
+                                        MapTileIndex.getY(pMapTileIndex) + mImageFilenameEnding
+                            }
+                        }
+
+                        MapView(ctx).apply {
+                            setTileSource(fuenteOsmReal)
+                            setMultiTouchControls(true)
+                            setUseDataConnection(true)
+                            controller.setZoom(16.5)
                             controller.setCenter(GeoPoint(latSeleccionada, lngSeleccionada))
                         }
                     },
@@ -1142,6 +1256,7 @@ fun ModalPuntoEncuentroMapa(
         }
     }
 }
+
 
 // Pantalla 9: Modal de Calificación Bilateral de 1 a 5 estrellas (RF-25, RF-26 y RF-27)
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
