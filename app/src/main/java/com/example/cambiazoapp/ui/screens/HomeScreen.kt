@@ -354,7 +354,7 @@ fun HomeScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "Distancia máxima (RF-09)",
+                    text = "Distancia máxima",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = DarkSlateText

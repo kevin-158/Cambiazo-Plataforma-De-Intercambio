@@ -876,85 +876,75 @@ fun ModalPuntoEncuentroMapa(
     val context = LocalContext.current
 
     // Fuente de mapas OSM vía CDN Carto Voyager (alta velocidad, diseño limpio y sin bloqueo 403)
-    /*
-    val fuenteMapaSeguro = remember {
-        object : XYTileSource(
-            "CartoVoyagerOSM",
-            0,
-            19,
-            256,
-            ".png",
-            arrayOf(
-                "https://a.basemaps.cartocdn.com/rastertiles/voyager/",
-                "https://b.basemaps.cartocdn.com/rastertiles/voyager/",
-                "https://c.basemaps.cartocdn.com/rastertiles/voyager/"
-            )
-        ) {
-            override fun getTileURLString(pMapTileIndex: Long): String {
-                return baseUrl +
-                        MapTileIndex.getZoom(pMapTileIndex) + "/" +
-                        MapTileIndex.getX(pMapTileIndex) + "/" +
-                        MapTileIndex.getY(pMapTileIndex) + mImageFilenameEnding
-            }
-        }
-    }
-
-     */
-
+// Lista de Puntos Seguros con coordenadas GPS exactas sobre el mapa de Cajamarca (RF-18)
     val puntosSeguros = remember {
         listOf(
             PuntoSeguroSugerido(
-                "C.C. El Quinde Cajamarca",
-                "Av. Hoyos Rubio - Zona comercial con vigilancia",
-                -7.1542,
-                -78.5058
+                "MegaPlaza Cajamarca",
+                "Jr. Sor Manuela Gil / Av. Hoyos Rubio - Zona comercial segura",
+                -7.1520,
+                -78.5057
             ),
             PuntoSeguroSugerido(
                 "Plaza de Armas de Cajamarca",
-                "Centro Histórico - Zona pública monitoreada",
-                -7.1617,
-                -78.5128
+                "Centro Histórico (Jr. Del Comercio y Jr. Dos de Mayo)",
+                -7.1569,
+                -78.5175
             ),
             PuntoSeguroSugerido(
                 "Real Plaza Cajamarca",
                 "Av. Vía de Evitamiento Norte - Patio principal",
-                -7.1506,
-                -78.5051
+                -7.1542,
+                -78.5042
             ),
             PuntoSeguroSugerido(
                 "Campus UPN Cajamarca",
-                "Av. Vía de Evitamiento Norte - Entrada principal",
-                -7.1489,
-                -78.5065
+                "Av. Vía de Evitamiento Norte Cuadra 15 - Puerta principal",
+                -7.1503,
+                -78.5060
+            ),
+            PuntoSeguroSugerido(
+                "Complejo Qhapaq Ñan",
+                "Av. Alameda de los Incas - Explanada principal",
+                -7.1636,
+                -78.4998
             ),
             PuntoSeguroSugerido(
                 "Plazuela Belén",
-                "Jr. Belén - Centro de Cajamarca",
-                -7.1639,
-                -78.5142
+                "Jr. Belén con Jr. Junín - Centro Histórico",
+                -7.1588,
+                -78.5186
             )
         )
     }
 
-    val latInicial = if (intercambio.puntoEncuentroLat != 0.0) {
-        intercambio.puntoEncuentroLat
-    } else {
-        puntosSeguros.first().latitud
+    // Si el punto guardado coincide con alguno de la lista, usar su coordenada exacta actualizada
+    val puntoCoincidente = puntosSeguros.find {
+        it.nombre.equals(intercambio.puntoEncuentroNombre, ignoreCase = true) ||
+                (intercambio.puntoEncuentroNombre.contains("Quinde", ignoreCase = true) && it.nombre.contains("MegaPlaza"))
     }
-    val lngInicial = if (intercambio.puntoEncuentroLng != 0.0) {
-        intercambio.puntoEncuentroLng
-    } else {
-        puntosSeguros.first().longitud
+
+    val latInicial = when {
+        puntoCoincidente != null -> puntoCoincidente.latitud
+        intercambio.puntoEncuentroLat != 0.0 -> intercambio.puntoEncuentroLat
+        else -> puntosSeguros.first().latitud
+    }
+    val lngInicial = when {
+        puntoCoincidente != null -> puntoCoincidente.longitud
+        intercambio.puntoEncuentroLng != 0.0 -> intercambio.puntoEncuentroLng
+        else -> puntosSeguros.first().longitud
     }
 
     var nombreSeleccionado by remember {
         mutableStateOf(
-            intercambio.puntoEncuentroNombre.ifBlank { puntosSeguros.first().nombre }
+            puntoCoincidente?.nombre
+                ?: intercambio.puntoEncuentroNombre.ifBlank { puntosSeguros.first().nombre }
         )
     }
     var direccionSeleccionada by remember {
         mutableStateOf(
-            intercambio.puntoEncuentroDireccion.ifBlank { puntosSeguros.first().direccion }
+            puntoCoincidente?.direccion
+                ?: intercambio.puntoEncuentroDireccion.ifBlank { puntosSeguros.first().direccion }
         )
     }
     var latSeleccionada by remember { mutableDoubleStateOf(latInicial) }
@@ -1039,71 +1029,7 @@ fun ModalPuntoEncuentroMapa(
             Spacer(modifier = Modifier.height(12.dp))
 
             // Mapa interactivo real con carpeta de caché limpia (osmdroid_v2) y cabeceras HTTP válidas
-            /*
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(255.dp)
-                    .clip(RoundedCornerShape(18.dp))
-                    .border(1.5.dp, EmeraldPrimary, RoundedCornerShape(18.dp))
-            ) {
-                AndroidView(
-                    factory = { ctx ->
-                        val config = Configuration.getInstance()
-                        // Carpeta de caché nueva para no leer ni el 403 antiguo ni el cartel de Carto
-                        val carpetaCacheLimpia = File(ctx.cacheDir, "osmdroid_osm_clean")
-                        carpetaCacheLimpia.mkdirs()
-                        config.osmdroidBasePath = carpetaCacheLimpia
-                        config.osmdroidTileCache = File(carpetaCacheLimpia, "tiles")
 
-                        // OpenStreetMap exige únicamente el packageName real de la app y sin cabeceras extra
-                        config.userAgentValue = ctx.packageName
-                        config.additionalHttpRequestProperties.clear()
-
-                        MapView(ctx).apply {
-                            // Servidor oficial gratuito de OpenStreetMap (No requiere API Key)
-                            setTileSource(TileSourceFactory.MAPNIK)
-                            setMultiTouchControls(true)
-                            controller.setZoom(16.8)
-                            controller.setCenter(GeoPoint(latSeleccionada, lngSeleccionada))
-                        }
-                    },
-                    update = { mapView ->
-                        val geoPoint = GeoPoint(latSeleccionada, lngSeleccionada)
-                        mapView.controller.animateTo(geoPoint)
-                        mapView.overlays.clear()
-
-                        // Permitir tocar cualquier calle del mapa para ubicar el pin
-                        val receptorToques = object : MapEventsReceiver {
-                            override fun singleTapConfirmedHelper(p: GeoPoint?): Boolean {
-                                if (p != null) {
-                                    latSeleccionada = p.latitude
-                                    lngSeleccionada = p.longitude
-                                    nombreSeleccionado = "Punto seleccionado en el mapa"
-                                    direccionSeleccionada = "Cajamarca (%.4f, %.4f)".format(p.latitude, p.longitude)
-                                }
-                                return true
-                            }
-
-                            override fun longPressHelper(p: GeoPoint?): Boolean = false
-                        }
-                        mapView.overlays.add(MapEventsOverlay(receptorToques))
-
-                        // Marcador visual en la coordenada seleccionada
-                        val marker = Marker(mapView).apply {
-                            position = geoPoint
-                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                            title = nombreSeleccionado
-                            snippet = direccionSeleccionada
-                        }
-                        mapView.overlays.add(marker)
-                        marker.showInfoWindow()
-                        mapView.invalidate()
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-            */
             // Mapa interactivo real de OpenStreetMap (RF-18)
             Box(
                 modifier = Modifier
@@ -1156,7 +1082,8 @@ fun ModalPuntoEncuentroMapa(
                     },
                     update = { mapView ->
                         val geoPoint = GeoPoint(latSeleccionada, lngSeleccionada)
-                        mapView.controller.animateTo(geoPoint)
+                        mapView.controller.setZoom(17.2)
+                        mapView.controller.setCenter(geoPoint)
                         mapView.overlays.clear()
 
                         // Permitir tocar cualquier calle del mapa para ubicar el pin

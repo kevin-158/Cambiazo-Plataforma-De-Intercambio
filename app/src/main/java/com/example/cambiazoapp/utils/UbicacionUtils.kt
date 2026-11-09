@@ -12,13 +12,15 @@ data class ZonaGeografica(
 object UbicacionUtils {
 
     // Zonas reales de Cajamarca con sus coordenadas GPS exactas para RF-09
+    // Zonas reales de Cajamarca con sus coordenadas GPS exactas verificadas en OpenStreetMap (RF-09)
     val zonasCajamarca = listOf(
-        ZonaGeografica("Centro Histórico / Plaza de Armas", -7.1617, -78.5128),
-        ZonaGeografica("Av. Hoyos Rubio / El Quinde", -7.1542, -78.5058),
-        ZonaGeografica("Vía de Evitamiento Norte / UPN", -7.1489, -78.5065),
-        ZonaGeografica("Real Plaza / Av. Evitamiento", -7.1506, -78.5051),
-        ZonaGeografica("Barrio San Sebastián", -7.1654, -78.5089),
-        ZonaGeografica("Barrio San Pedro", -7.1668, -78.5172),
+        ZonaGeografica("Centro Histórico / Plaza de Armas", -7.1569, -78.5175),
+        ZonaGeografica("MegaPlaza / Av. Hoyos Rubio", -7.1520, -78.5057),
+        ZonaGeografica("Vía de Evitamiento Norte / UPN", -7.1503, -78.5060),
+        ZonaGeografica("Real Plaza / Av. Evitamiento", -7.1542, -78.5042),
+        ZonaGeografica("Complejo Qhapaq Ñan / Alameda", -7.1636, -78.4998),
+        ZonaGeografica("Barrio San Sebastián", -7.1610, -78.5122),
+        ZonaGeografica("Barrio San Pedro", -7.1605, -78.5215),
         ZonaGeografica("Mollepampa", -7.1752, -78.4965),
         ZonaGeografica("Baños del Inca", -7.1633, -78.4658)
     )

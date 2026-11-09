@@ -533,7 +533,7 @@ fun PublicarProductoScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Ubicación del artículo (RF-09)",
+                            text = "Ubicación del artículo",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = DarkSlateText
