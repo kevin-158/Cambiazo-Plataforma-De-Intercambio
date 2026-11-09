@@ -112,6 +112,8 @@ import java.util.Locale
 import org.osmdroid.tileprovider.tilesource.XYTileSource
 import org.osmdroid.util.MapTileIndex
 
+//======Chat en Vivo y Negociación (Al abrir una propuesta)============
+
 // Modelo auxiliar para los puntos de encuentro sugeridos (RF-18)
 data class PuntoSeguroSugerido(
     val nombre: String,

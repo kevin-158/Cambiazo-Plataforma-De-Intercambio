@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.cambiazoapp.model.Producto
 import com.example.cambiazoapp.model.Usuario
 import com.example.cambiazoapp.repository.ProductoRepository
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
@@ -25,6 +26,10 @@ class ProductoViewModel : ViewModel() {
 
     private val _catalogo = MutableStateFlow(emptyList<Producto>())
     val catalogo = _catalogo.asStateFlow()
+
+    // Lista de artículos completos marcados como favoritos por el usuario (RF-12)
+    private val _productosFavoritos = MutableStateFlow(emptyList<Producto>())
+    val productosFavoritos = _productosFavoritos.asStateFlow()
 
     private val _usuariosMapa = MutableStateFlow(emptyMap<String, Usuario>())
     val usuariosMapa = _usuariosMapa.asStateFlow()
@@ -48,6 +53,10 @@ class ProductoViewModel : ViewModel() {
     val mensaje = _mensaje.asStateFlow()
 
     private fun mapearDocAUsuario(uid: String, doc: DocumentSnapshot): Usuario {
+        val favs = (doc.get("favoritosIds") as? List<*>)
+            ?.mapNotNull { it as? String }
+            ?: emptyList()
+
         return Usuario(
             uid = uid,
             nombre = doc.getString("nombre")?.takeIf { it.isNotBlank() } ?: "Usuario Cambiazo",
@@ -60,19 +69,79 @@ class ProductoViewModel : ViewModel() {
             promedioEstrellas = doc.getDouble("promedioEstrellas") ?: 5.0,
             totalResenas = (doc.getLong("totalResenas") ?: 0L).toInt(),
             truequesCompletados = (doc.getLong("truequesCompletados") ?: 0L).toInt(),
-            latitud = doc.getDouble("latitud") ?: -7.1617,
-            longitud = doc.getDouble("longitud") ?: -78.5128
+            latitud = doc.getDouble("latitud") ?: -7.1569,
+            longitud = doc.getDouble("longitud") ?: -78.5175,
+            favoritosIds = favs
         )
     }
 
+    // RF-12: Guarda o desmarca un artículo de la lista de favoritos y lo persiste en Firestore
     fun alternarFavorito(productoId: String) {
+        if (productoId.isBlank()) return
+        val uidActual = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+
         val actual = _favoritosIds.value.toMutableSet()
-        if (actual.contains(productoId)) {
+        val seAgrego = if (actual.contains(productoId)) {
             actual.remove(productoId)
+            false
         } else {
             actual.add(productoId)
+            true
         }
         _favoritosIds.value = actual
+        actualizarListaProductosFavoritos()
+
+        if (uidActual.isNotBlank()) {
+            viewModelScope.launch {
+                try {
+                    db.collection("usuarios")
+                        .document(uidActual)
+                        .set(mapOf("favoritosIds" to actual.toList()), SetOptions.merge())
+                        .await()
+                    _mensaje.value = if (seAgrego) {
+                        "Artículo guardado en tus favoritos"
+                    } else {
+                        "Artículo eliminado de tus favoritos"
+                    }
+                } catch (_: Exception) {
+                }
+            }
+        }
+    }
+
+    // RF-12: Carga los objetos Producto correspondientes a los IDs guardados en favoritos
+    fun cargarArticulosFavoritos(usuarioId: String) {
+        if (usuarioId.isBlank()) return
+        viewModelScope.launch {
+            try {
+                val docUser = db.collection("usuarios").document(usuarioId).get().await()
+                val favs = (docUser.get("favoritosIds") as? List<*>)
+                    ?.mapNotNull { it as? String }
+                    ?.toSet()
+                    ?: emptySet()
+                _favoritosIds.value = favs
+
+                if (favs.isEmpty()) {
+                    _productosFavoritos.value = emptyList()
+                    return@launch
+                }
+
+                val resCatalogo = repository.obtenerCatalogoDisponible(usuarioId)
+                val disponibles = resCatalogo.getOrNull() ?: emptyList()
+                _productosFavoritos.value = disponibles.filter { favs.contains(it.id) }
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    private fun actualizarListaProductosFavoritos() {
+        val ids = _favoritosIds.value
+        val base = _catalogo.value
+        if (base.isNotEmpty()) {
+            _productosFavoritos.value = base.filter { ids.contains(it.id) }
+        } else {
+            _productosFavoritos.value = _productosFavoritos.value.filter { ids.contains(it.id) }
+        }
     }
 
     fun cargarPerfilUsuario(usuarioId: String) {
@@ -81,7 +150,14 @@ class ProductoViewModel : ViewModel() {
             try {
                 val doc = db.collection("usuarios").document(usuarioId).get().await()
                 if (doc.exists()) {
-                    _perfilUsuarioActual.value = mapearDocAUsuario(usuarioId, doc)
+                    val user = mapearDocAUsuario(usuarioId, doc)
+                    _perfilUsuarioActual.value = user
+                    // Si es el usuario autenticado, sincronizar su lista de favoritos (RF-12)
+                    val uidAutenticado = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+                    if (usuarioId == uidAutenticado) {
+                        _favoritosIds.value = user.favoritosIds.toSet()
+                        actualizarListaProductosFavoritos()
+                    }
                 }
             } catch (_: Exception) {
             }
@@ -177,11 +253,27 @@ class ProductoViewModel : ViewModel() {
             _cargando.value = true
             _mensaje.value = ""
 
+            // Asegurar que tenemos los favoritos del usuario actual cargados desde Firestore
+            try {
+                if (usuarioActualId.isNotBlank()) {
+                    val docMiUser = db.collection("usuarios").document(usuarioActualId).get().await()
+                    if (docMiUser.exists()) {
+                        val misFavs = (docMiUser.get("favoritosIds") as? List<*>)
+                            ?.mapNotNull { it as? String }
+                            ?.toSet()
+                            ?: emptySet()
+                        _favoritosIds.value = misFavs
+                    }
+                }
+            } catch (_: Exception) {
+            }
+
             val resultado = repository.obtenerCatalogoDisponible(usuarioActualId)
 
             if (resultado.isSuccess) {
                 val lista = resultado.getOrNull() ?: emptyList()
                 _catalogo.value = lista
+                actualizarListaProductosFavoritos()
 
                 val uidsUnicos = lista.map { it.usuarioId }.filter { it.isNotBlank() }.distinct()
                 val mapaTemp = _usuariosMapa.value.toMutableMap()
@@ -209,6 +301,22 @@ class ProductoViewModel : ViewModel() {
         viewModelScope.launch {
             _cargando.value = true
             _mensaje.value = ""
+
+            // Sincronizar favoritos del usuario actual para que el corazón en Detalle aparezca marcado si ya es favorito
+            val uidActual = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+            if (uidActual.isNotBlank() && _favoritosIds.value.isEmpty()) {
+                try {
+                    val docActual = db.collection("usuarios").document(uidActual).get().await()
+                    if (docActual.exists()) {
+                        val favs = (docActual.get("favoritosIds") as? List<*>)
+                            ?.mapNotNull { it as? String }
+                            ?.toSet()
+                            ?: emptySet()
+                        _favoritosIds.value = favs
+                    }
+                } catch (_: Exception) {
+                }
+            }
 
             val resultado = repository.obtenerProductoPorId(productoId)
             if (resultado.isSuccess) {

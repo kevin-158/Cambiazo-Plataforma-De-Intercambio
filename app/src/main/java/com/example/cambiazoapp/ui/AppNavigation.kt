@@ -1,6 +1,11 @@
 package com.example.cambiazoapp.ui
 
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -126,6 +131,12 @@ fun AppNavigation() {
                         launchSingleTop = true
                     }
                 },
+                /*
+                onIrAPantallaNueva = {
+                    navController.navigate("pantalla_nueva")
+                },
+
+                 */
                 onAbrirChatNegociacion = { intercambioId ->
                     navController.navigate("chat/$intercambioId")
                 }
@@ -206,5 +217,46 @@ fun AppNavigation() {
                 }
             )
         }
+        /*
+        composable("Pantalla Nueva"){
+            PantallaNuevaEvaluacion(onVolver = {navController.popBackStack()})
+
+        }
+
+         */
+
     }
 }
+
+
+/*
+// Pantalla nueva p
+@androidx.compose.runtime.Composable
+fun PantallaNuevaEvaluacion(
+    onVolver: () -> Unit
+) {
+    androidx.compose.foundation.layout.Column(
+        modifier = androidx.compose.ui.Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center
+    ) {
+        androidx.compose.material3.Text(
+            text = "Consejos de Seguridad Cambiazo",
+            fontSize = 22.sp,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+        )
+        androidx.compose.foundation.layout.Spacer(modifier = androidx.compose.ui.Modifier.height(12.dp))
+        androidx.compose.material3.Text(
+            text = "1. Reúnete siempre en puntos públicos como MegaPlaza, Real Plaza o Plaza de Armas.\n2. Verifica el estado del artículo antes de confirmar el trueque.",
+            fontSize = 15.sp
+        )
+        androidx.compose.foundation.layout.Spacer(modifier = androidx.compose.ui.Modifier.height(24.dp))
+        androidx.compose.material3.Button(onClick = onVolver) {
+            androidx.compose.material3.Text("Volver atrás")
+        }
+    }
+}
+
+ */

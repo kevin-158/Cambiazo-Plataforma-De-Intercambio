@@ -21,5 +21,6 @@ data class Usuario(
     val totalResenas: Int = 0,
     val truequesCompletados: Int = 0,
     val latitud: Double = -7.1617,
-    val longitud: Double = -78.5128
+    val longitud: Double = -78.5128,
+    val favoritosIds: List<String> = emptyList() // RF-12: IDs de artículos guardados en favoritos
 )

@@ -92,6 +92,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.modifier.modifierLocalProvider
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -142,6 +143,7 @@ fun MiInventarioScreen(
     val misResenas by intercambioViewModel.resenasUsuario.collectAsState()
     val totalNoLeidos by intercambioViewModel.totalNoLeidos.collectAsState()
 
+
     var tabSeleccionado by remember { mutableIntStateOf(0) }
 
     // Estados para edición de artículo, edición de perfil y confirmación de cierre de sesión
@@ -149,6 +151,27 @@ fun MiInventarioScreen(
     var productoAEliminar by remember { mutableStateOf<Producto?>(null) }
     var mostrarEditarPerfil by remember { mutableStateOf(false) }
     var mostrarConfirmacionCerrarSesion by remember { mutableStateOf(false) }
+    /*
+    var mostarNuevaPantalla by remember { mutableStateOf(false) }
+    if (mostarNuevaPantalla){
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(PureWhiteSurface),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text("Pantalla nueva")
+            Button(
+                onClick = {mostarNuevaPantalla = false}
+            ) {
+                Text("Volver")
+            }
+        }
+        return
+    }
+
+     */
 
     // Cargar inventario, perfil, trueques y reseñas reales al abrir la pantalla
     LaunchedEffect(usuarioId) {
@@ -564,6 +587,36 @@ fun MiInventarioScreen(
                                 color = DeepGreenBrand
                             )
                         }
+
+
+
+                        /*
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Botón directo para ir a la pantalla de Mis Trueques desde el Perfil
+                        Button(
+                            onClick = onIrAActividad,
+                            colors = ButtonDefaults.buttonColors(containerColor = DeepGreenBrand),
+                            shape = RoundedCornerShape(20.dp),
+                            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = "Ver mis propuestas de trueque",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+
+                         */
+                        /*
+                        Button(
+                            onClick = {mostarNuevaPantalla = true},
+                        ) {
+                            Text("Ir a nueva Pantalla")
+                        }
+
+                         */
 
                         Spacer(modifier = Modifier.height(14.dp))
 

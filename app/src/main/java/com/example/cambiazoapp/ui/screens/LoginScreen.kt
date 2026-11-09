@@ -80,6 +80,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import com.example.cambiazoapp.R
 
+//====================Iniciar Sesión================
 @Composable
 fun LoginScreen(
     onIrARegistro: () -> Unit,

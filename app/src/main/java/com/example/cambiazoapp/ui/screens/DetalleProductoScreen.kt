@@ -1,5 +1,6 @@
 package com.example.cambiazoapp.ui.screens
 
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -8,15 +9,20 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -29,27 +35,22 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Verified
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.Lightbulb
-import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
@@ -72,7 +73,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -91,15 +91,19 @@ import com.example.cambiazoapp.ui.theme.LightGreenTint
 import com.example.cambiazoapp.ui.theme.MutedText
 import com.example.cambiazoapp.ui.theme.OffWhiteBackground
 import com.example.cambiazoapp.ui.theme.PureWhiteSurface
+import com.example.cambiazoapp.utils.UbicacionUtils
 import com.example.cambiazoapp.viewmodel.IntercambioViewModel
 import com.example.cambiazoapp.viewmodel.ProductoViewModel
 import com.google.firebase.auth.FirebaseAuth
 
+// Pantalla 4 y 5: Detalle del Artículo (RF-10, RF-11), Favoritos/Compartir (RF-12) y Modal de Propuesta (RF-13)
 /**
  * Pantalla 4: Detalle del Articulo (RF-10, RF-11, RF-12)
  * Incluye ademas la Pantalla 5: Modal de Propuesta de Trueque (RF-13, RF-14, RF-15).
  */
-@OptIn(ExperimentalMaterial3Api::class)
+//=========Detalle del Artículo (Al tocar cualquier producto del catálogo)=======
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun DetalleProductoScreen(
     productoId: String,
@@ -116,40 +120,42 @@ fun DetalleProductoScreen(
     // Estados del producto visitado y de su propietario (RF-10 y RF-11)
     val producto by viewModel.productoSeleccionado.collectAsState()
     val propietario by viewModel.propietarioProducto.collectAsState()
+    val perfilActual by viewModel.perfilUsuarioActual.collectAsState()
     val misProductos by viewModel.productos.collectAsState()
     val favoritosIds by viewModel.favoritosIds.collectAsState()
     val cargandoProducto by viewModel.cargando.collectAsState()
 
-    // Estados para el Modal de Propuesta de Trueque (Pantalla 5 - RF-13)
+    val cargandoPropuesta by intercambioViewModel.cargando.collectAsState()
+    val mensajeIntercambio by intercambioViewModel.mensaje.collectAsState()
+
+    // Estados para el Modal de Proponer Trueque (RF-13)
     var mostrarModalPropuesta by remember { mutableStateOf(false) }
     var miArticuloElegido by remember { mutableStateOf<Producto?>(null) }
     var mensajePropuesta by remember { mutableStateOf("") }
-    var errorModal by remember { mutableStateOf("") }
-
-    val cargandoIntercambio by intercambioViewModel.cargando.collectAsState()
-    val mensajeIntercambio by intercambioViewModel.mensaje.collectAsState()
+    var errorPropuesta by remember { mutableStateOf("") }
 
     // Cargar los datos del producto visitado y tambien mi propio inventario (para RF-13)
     LaunchedEffect(productoId, usuarioActualId) {
         viewModel.cargarProductoPorId(productoId)
         if (usuarioActualId.isNotEmpty()) {
+            viewModel.cargarPerfilUsuario(usuarioActualId)
             viewModel.cargarProductosUsuario(usuarioActualId)
         }
     }
-
     // Filtrar unicamente mis articulos que esten ACTIVOS (no pausados) para ofrecer en trueque (RF-13)
     val misArticulosActivos = remember(misProductos) {
         misProductos.filter { it.activo }
     }
 
     // Seleccionar por defecto el primer articulo activo si aun no se ha elegido ninguno
-    LaunchedEffect(misArticulosActivos, mostrarModalPropuesta) {
-        if (mostrarModalPropuesta && miArticuloElegido == null && misArticulosActivos.isNotEmpty()) {
+    LaunchedEffect(misArticulosActivos) {
+        if (miArticuloElegido == null && misArticulosActivos.isNotEmpty()) {
             miArticuloElegido = misArticulosActivos.first()
         }
     }
 
-    if (cargandoProducto && producto == null) {
+    val prod = producto
+    if (cargandoProducto || prod == null) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -161,53 +167,57 @@ fun DetalleProductoScreen(
         return
     }
 
-    val prod = producto
-    if (prod == null) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(OffWhiteBackground)
-                .padding(24.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = "El artículo ya no está disponible.",
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = DarkSlateText
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Button(
-                    onClick = onVolver,
-                    colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary)
-                ) {
-                    Text("Volver al catálogo", color = Color.White)
-                }
-            }
-        }
-        return
-    }
-
-    // Lista de imagenes para la galeria deslizable (RF-10)
-    val listaFotos = prod.imagenes.ifEmpty {
-        if (prod.imagenUrl.isNotBlank()) listOf(prod.imagenUrl) else emptyList()
-    }
-    val pagerState = rememberPagerState(pageCount = { maxOf(listaFotos.size, 1) })
+    // Verificar en tiempo real si este artículo está en la lista de favoritos del usuario (RF-12)
     val esFavorito = favoritosIds.contains(prod.id)
-    val esMiPropioProducto = prod.usuarioId == usuarioActualId
-    val nombreDueno = propietario?.nombre ?: "Usuario Cambiazo"
 
+    val galeriaImagenes = remember(prod) {
+        prod.imagenes.ifEmpty {
+            if (prod.imagenUrl.isNotBlank()) listOf(prod.imagenUrl) else emptyList()
+        }
+    }
+
+    val nombreDueno = propietario?.nombre?.takeIf { it.isNotBlank() } ?: "Usuario Cambiazo"
+    val promedioEstrellasDueno = propietario?.promedioEstrellas ?: 5.0
+    val totalResenasDueno = propietario?.totalResenas ?: 0
+
+    // Calcular distancia real en km entre el usuario actual y el artículo (RF-09)
+    val distanciaTexto = remember(perfilActual, prod) {
+        val miLat = perfilActual?.latitud ?: -7.1569
+        val miLng = perfilActual?.longitud ?: -78.5175
+        val km = UbicacionUtils.calcularDistanciaKm(miLat, miLng, prod.latitud, prod.longitud, prod.id)
+        UbicacionUtils.formatearDistancia(km)
+    }
+
+    // Función para compartir el artículo mediante el selector nativo de Android (WhatsApp, redes, etc.)
+    fun compartirArticulo(articulo: Producto) {
+        val intereses = articulo.interesesCambio.ifBlank { "Abierto a ofertas" }
+        val textoCompartir = buildString {
+            append("🔄 *¡Mira este artículo para trueque en Cambiazo!* \n\n")
+            append("📦 *Artículo:* ${articulo.nombre}\n")
+            append("🏷️ *Categoría:* ${articulo.categoria} (${articulo.estado})\n")
+            append("📍 *Ubicación:* ${articulo.direccionReferencia} - Cajamarca\n")
+            append("🤝 *Busca a cambio:* $intereses\n\n")
+            append("📝 *Descripción:* ${articulo.descripcion}\n\n")
+            append("¡Descarga *Cambiazo* y propón un intercambio directo!")
+        }
+
+        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, "Trueque en Cambiazo: ${articulo.nombre}")
+            putExtra(Intent.EXTRA_TEXT, textoCompartir)
+        }
+        val shareIntent = Intent.createChooser(sendIntent, "Compartir artículo mediante...")
+        context.startActivity(shareIntent)
+    }
+
+    // Modal de Propuesta de Trueque (Pantalla 5 / RF-13)
     // =========================================================================
     // PANTALLA 5: MODAL DE PROPUESTA DE TRUEQUE (RF-13, RF-14 y RF-15)
     // =========================================================================
+
     if (mostrarModalPropuesta) {
         ModalBottomSheet(
-            onDismissRequest = {
-                mostrarModalPropuesta = false
-                errorModal = ""
-                intercambioViewModel.limpiarMensaje()
-            },
+            onDismissRequest = { mostrarModalPropuesta = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = PureWhiteSurface,
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
@@ -216,296 +226,250 @@ fun DetalleProductoScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .navigationBarsPadding()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 22.dp, vertical = 10.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .imePadding()
+                    .padding(horizontal = 22.dp, vertical = 12.dp)
             ) {
-                // Titulo y subtitulo del modal (Mockup Pantalla 5)
-                Text(
-                    text = "Proponer un Cambiazo",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = DarkSlateText,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Selecciona qué artículo de tu inventario deseas ofrecer a cambio",
-                    fontSize = 14.sp,
-                    color = MutedText,
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // 1. Seccion: ESTÁS SOLICITANDO
-                Text(
-                    text = "ESTÁS SOLICITANDO",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MutedText,
-                    letterSpacing = 0.8.sp,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Surface(
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    color = Color(0xFFEDF4FF),
-                    border = BorderStroke(1.dp, Color(0xFFD1E4FB))
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Proponer Trueque",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = DarkSlateText
+                        )
+                        Text(
+                            text = "Selecciona un artículo de tu inventario para ofrecer",
+                            fontSize = 13.sp,
+                            color = MutedText
+                        )
+                    }
+                    IconButton(onClick = { mostrarModalPropuesta = false }) {
+                        Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = DarkSlateText)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Comparativa visual en vivo entre Mi Oferta y el Artículo Solicitado (Mockup Pantalla 5)
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = LightGreenTint.copy(alpha = 0.55f),
+                    border = BorderStroke(1.dp, EmeraldPrimary.copy(alpha = 0.4f)),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        CambiazoImagen(
-                            imagenData = listaFotos.firstOrNull() ?: "",
-                            contentDescription = prod.nombre,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(64.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                        )
-                        Spacer(modifier = Modifier.width(14.dp))
-                        Column(modifier = Modifier.weight(1f)) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Tú ofreces", fontSize = 11.sp, color = MutedText)
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(72.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(PureWhiteSurface),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (miArticuloElegido != null) {
+                                    CambiazoImagen(
+                                        imagenData = miArticuloElegido!!.imagenUrl.ifBlank {
+                                            miArticuloElegido!!.imagenes.firstOrNull() ?: ""
+                                        },
+                                        contentDescription = miArticuloElegido!!.nombre,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    Text("?", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MutedText)
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = prod.nombre,
-                                fontSize = 16.sp,
+                                text = miArticuloElegido?.nombre ?: "Elige abajo",
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = DarkSlateText,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                        }
+
+                        Surface(
+                            shape = CircleShape,
+                            color = EmeraldPrimary,
+                            modifier = Modifier
+                                .padding(horizontal = 8.dp)
+                                .size(38.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
                                 Icon(
-                                    imageVector = Icons.Outlined.Person,
+                                    imageVector = Icons.Default.SwapHoriz,
                                     contentDescription = null,
-                                    tint = MutedText,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "Propiedad de ",
-                                    fontSize = 13.sp,
-                                    color = MutedText
-                                )
-                                Text(
-                                    text = "@${nombreDueno.replace(" ", "")}",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = DeepGreenBrand
+                                    tint = Color.White,
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
+                        }
+
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Por el artículo", fontSize = 11.sp, color = MutedText)
+                            Spacer(modifier = Modifier.height(6.dp))
+                            CambiazoImagen(
+                                imagenData = galeriaImagenes.firstOrNull() ?: "",
+                                contentDescription = prod.nombre,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(72.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = prod.nombre,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = DarkSlateText,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(22.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                // 2. Seccion RF-13: Selecciona tu articulo para el trueque
                 Text(
-                    text = "Selecciona tu artículo para el trueque:",
-                    fontSize = 15.sp,
+                    text = "Tu inventario disponible (${misArticulosActivos.size})",
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
-                    color = DarkSlateText,
-                    modifier = Modifier.fillMaxWidth()
+                    color = DarkSlateText
                 )
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
-                // Carrusel horizontal con mis articulos activos + opcion de publicar nuevo (RF-13 y RF-15)
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(misArticulosActivos, key = { it.id }) { miProd ->
-                        val seleccionado = miArticuloElegido?.id == miProd.id
-                        val imgMiProd = miProd.imagenUrl.ifBlank {
-                            miProd.imagenes.firstOrNull() ?: ""
-                        }
-
-                        Card(
-                            modifier = Modifier
-                                .width(155.dp)
-                                .clickable {
-                                    miArticuloElegido = miProd
-                                    errorModal = ""
-                                },
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = PureWhiteSurface),
-                            border = BorderStroke(
-                                width = if (seleccionado) 2.5.dp else 1.dp,
-                                color = if (seleccionado) EmeraldPrimary else InputBorder
-                            ),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                if (misArticulosActivos.isEmpty()) {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = InputBackground,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(18.dp)
                         ) {
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(110.dp)
-                                ) {
-                                    CambiazoImagen(
-                                        imagenData = imgMiProd,
-                                        contentDescription = miProd.nombre,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-
-                                    // Icono de check verde cuando el articulo esta seleccionado (Mockup Pantalla 5)
-                                    if (seleccionado) {
-                                        Box(
-                                            modifier = Modifier
-                                                .align(Alignment.TopEnd)
-                                                .padding(8.dp)
-                                                .size(26.dp)
-                                                .clip(CircleShape)
-                                                .background(EmeraldPrimary),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Check,
-                                                contentDescription = "Seleccionado",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(16.dp)
-                                            )
+                            Text(
+                                text = "Necesitas tener al menos 1 artículo activo en tu inventario para proponer un trueque.",
+                                fontSize = 13.sp,
+                                color = MutedText,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Button(
+                                onClick = {
+                                    mostrarModalPropuesta = false
+                                    onIrAPublicarNuevo()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Publicar un artículo ahora", color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                } else {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(misArticulosActivos, key = { it.id }) { itemPropio ->
+                            val seleccionado = miArticuloElegido?.id == itemPropio.id
+                            Card(
+                                modifier = Modifier
+                                    .width(135.dp)
+                                    .clickable {
+                                        miArticuloElegido = itemPropio
+                                        errorPropuesta = ""
+                                    },
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (seleccionado) LightGreenTint else PureWhiteSurface
+                                ),
+                                border = BorderStroke(
+                                    width = if (seleccionado) 2.dp else 1.dp,
+                                    color = if (seleccionado) EmeraldPrimary else InputBorder
+                                )
+                            ) {
+                                Column(modifier = Modifier.padding(8.dp)) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(85.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                    ) {
+                                        CambiazoImagen(
+                                            imagenData = itemPropio.imagenUrl.ifBlank {
+                                                itemPropio.imagenes.firstOrNull() ?: ""
+                                            },
+                                            contentDescription = itemPropio.nombre,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                        if (seleccionado) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .align(Alignment.TopEnd)
+                                                    .padding(4.dp)
+                                                    .size(22.dp)
+                                                    .clip(CircleShape)
+                                                    .background(EmeraldPrimary),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Check,
+                                                    contentDescription = null,
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                            }
                                         }
                                     }
-                                }
-
-                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Spacer(modifier = Modifier.height(6.dp))
                                     Text(
-                                        text = miProd.nombre,
-                                        fontSize = 14.sp,
+                                        text = itemPropio.nombre,
+                                        fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = DarkSlateText,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = if (seleccionado) LightGreenTint else Color(0xFFEDF4FF)
-                                    ) {
-                                        Text(
-                                            text = "Estado: ${miProd.estado.ifBlank { "Bueno" }}",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = if (seleccionado) DeepGreenBrand else DarkSlateText,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                        )
-                                    }
                                 }
                             }
                         }
                     }
-
-                    // RF-15: Tarjeta al final para publicar un nuevo articulo desde la misma ventana
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .width(140.dp)
-                                .height(175.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(LightGreenTint.copy(alpha = 0.45f))
-                                .border(
-                                    width = 1.5.dp,
-                                    color = EmeraldPrimary,
-                                    shape = RoundedCornerShape(16.dp)
-                                )
-                                .clickable {
-                                    mostrarModalPropuesta = false
-                                    onIrAPublicarNuevo()
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.padding(12.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(CircleShape)
-                                        .background(EmeraldPrimary),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Add,
-                                        contentDescription = "Publicar nuevo",
-                                        tint = Color.White
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Text(
-                                    text = "Publicar nuevo artículo",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = DeepGreenBrand,
-                                    textAlign = TextAlign.Center
-                                )
-                                /*
-                                if(nombre.trim().length <5){
-                                    errorValidacion = "El título es muy corto (mínimo 5 caracteres)."
-                                    return@Button
-                                }
-
-                                 */
-                            }
-                        }
-                    }
                 }
 
-                if (misArticulosActivos.isEmpty()) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "No tienes artículos activos en tu inventario. Publica uno con el botón '+' para poder proponer un trueque.",
-                        fontSize = 12.sp,
-                        color = ErrorRed,
-                        textAlign = TextAlign.Center
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // 3. Seccion RF-14: Mensaje personalizado opcional
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.ChatBubbleOutline,
-                        contentDescription = null,
-                        tint = DeepGreenBrand,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Mensaje (Opcional)",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = DarkSlateText
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 OutlinedTextField(
                     value = mensajePropuesta,
                     onValueChange = { mensajePropuesta = it },
-                    placeholder = {
-                        Text(
-                            text = "Añade un mensaje para el dueño (ej. \"¡Hola! Te ofrezco mi artículo en excelente estado si te interesa...\")",
-                            color = MutedText,
-                            fontSize = 13.sp
-                        )
-                    },
-                    minLines = 3,
+                    label = { Text("Mensaje inicial para @$nombreDueno (opcional)") },
+                    placeholder = { Text("¡Hola! Me interesa tu artículo, te ofrezco el mío...") },
+                    minLines = 2,
                     shape = RoundedCornerShape(14.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = InputBackground,
@@ -516,41 +480,37 @@ fun DetalleProductoScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // Mostrar mensajes de validacion o error
-                if (errorModal.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(10.dp))
+                if (errorPropuesta.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = errorModal,
+                        text = errorPropuesta,
                         color = ErrorRed,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
 
-                if (mensajeIntercambio.isNotEmpty() && !mensajeIntercambio.contains("enviada")) {
-                    Spacer(modifier = Modifier.height(10.dp))
+                if (mensajeIntercambio.isNotEmpty() && !mensajeIntercambio.contains("Pendiente")) {
+                    Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = mensajeIntercambio,
                         color = ErrorRed,
-                        fontSize = 13.sp,
-                        textAlign = TextAlign.Center
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
 
-                Spacer(modifier = Modifier.height(22.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
-                // 4. Boton Principal: Enviar Propuesta de Trueque (RF-13)
                 Button(
                     onClick = {
-                        val seleccionado = miArticuloElegido
-                        if (seleccionado == null) {
-                            errorModal = "Selecciona un artículo de tu inventario para ofrecer a cambio."
+                        val ofrecido = miArticuloElegido
+                        if (ofrecido == null) {
+                            errorPropuesta = "Selecciona uno de tus artículos para ofrecer."
                             return@Button
                         }
-
                         intercambioViewModel.enviarPropuestaTrueque(
-                            productoOfrecido = seleccionado,
+                            productoOfrecido = ofrecido,
                             productoSolicitado = prod,
                             usuarioSolicitanteId = usuarioActualId,
                             nombrePropietario = nombreDueno,
@@ -559,120 +519,110 @@ fun DetalleProductoScreen(
                                 mostrarModalPropuesta = false
                                 Toast.makeText(
                                     context,
-                                    "Propuesta enviada como Pendiente",
+                                    "¡Propuesta enviada exitosamente!",
                                     Toast.LENGTH_SHORT
                                 ).show()
                                 onPropuestaEnviadaIrATrueques()
                             }
                         )
                     },
-                    enabled = !cargandoIntercambio && misArticulosActivos.isNotEmpty(),
+                    enabled = !cargandoPropuesta && misArticulosActivos.isNotEmpty(),
                     shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = EmeraldPrimary,
-                        contentColor = Color.White,
-                        disabledContainerColor = EmeraldPrimary.copy(alpha = 0.45f)
-                    ),
-                    contentPadding = PaddingValues(vertical = 16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary),
+                    contentPadding = PaddingValues(vertical = 15.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    if (cargandoIntercambio) {
+                    if (cargandoPropuesta) {
                         CircularProgressIndicator(
                             color = Color.White,
                             strokeWidth = 2.5.dp,
                             modifier = Modifier.size(22.dp)
                         )
                     } else {
+                        Icon(Icons.Default.SwapHoriz, contentDescription = null, tint = Color.White)
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "Enviar Propuesta de Trueque",
                             fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
                         )
                     }
-                    /*
-                    if (mensajePropuesta.trim().length >10){
-                        errorModal = "Escribe"
-                        return@Button
-                    }
-                     */
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(12.dp))
             }
         }
     }
 
-    // =========================================================================
-    // CONTENIDO PRINCIPAL DE LA PANTALLA 4: DETALLE DEL ARTÍCULO
-    // =========================================================================
     Scaffold(
         containerColor = OffWhiteBackground,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            Surface(
-                color = PureWhiteSurface,
-                shadowElevation = 12.dp,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+            if (prod.usuarioId != usuarioActualId) {
+                Surface(
+                    color = PureWhiteSurface,
+                    shadowElevation = 14.dp,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = PureWhiteSurface,
-                        border = BorderStroke(1.5.dp, DeepGreenBrand),
+                    Row(
                         modifier = Modifier
-                            .size(50.dp)
-                            .clickable(enabled = !esMiPropioProducto && prod.activo) {
-                                errorModal = ""
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // Botón rápido inferior de Favorito (RF-12)
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (esFavorito) Color(0xFFFFEBEE) else InputBackground,
+                            border = BorderStroke(
+                                1.dp,
+                                if (esFavorito) Color(0xFFE74C3C) else InputBorder
+                            ),
+                            modifier = Modifier
+                                .size(52.dp)
+                                .clickable {
+                                    viewModel.alternarFavorito(prod.id)
+                                    val msg = if (!esFavorito) {
+                                        "Agregado a tus favoritos ❤️"
+                                    } else {
+                                        "Eliminado de tus favoritos"
+                                    }
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = if (esFavorito) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                    contentDescription = "Guardar en favoritos",
+                                    tint = if (esFavorito) Color(0xFFE74C3C) else DarkSlateText,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+
+                        // Botón principal Proponer Trueque (RF-13)
+                        Button(
+                            onClick = {
                                 intercambioViewModel.limpiarMensaje()
                                 mostrarModalPropuesta = true
-                            }
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Outlined.ChatBubbleOutline,
-                                contentDescription = "Mensaje",
-                                tint = DeepGreenBrand
+                            },
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary),
+                            contentPadding = PaddingValues(vertical = 15.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.SwapHoriz, contentDescription = null, tint = Color.White)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Proponer Trueque",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
                             )
                         }
-                    }
-
-                    Button(
-                        onClick = {
-                            errorModal = ""
-                            intercambioViewModel.limpiarMensaje()
-                            mostrarModalPropuesta = true
-                        },
-                        enabled = !esMiPropioProducto && prod.activo,
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = EmeraldPrimary,
-                            contentColor = Color.White,
-                            disabledContainerColor = InputBorder
-                        ),
-                        contentPadding = PaddingValues(vertical = 15.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.SwapHoriz,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = when {
-                                esMiPropioProducto -> "Es tu propio artículo"
-                                !prod.activo -> "Artículo pausado"
-                                else -> "Proponer Trueque"
-                            },
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
-                        )
                     }
                 }
             }
@@ -684,149 +634,187 @@ fun DetalleProductoScreen(
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
         ) {
-            // 1. GALERÍA DE IMÁGENES INTERACTIVA (RF-10)
+            // 1. CARRUSEL DE IMÁGENES CON BOTONES DE VOLVER, COMPARTIR Y FAVORITOS (RF-10 y RF-12)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(340.dp)
+                    .height(330.dp)
                     .background(InputBackground)
             ) {
-                if (listaFotos.isNotEmpty()) {
-                    HorizontalPager(
-                        state = pagerState,
-                        modifier = Modifier.fillMaxSize()
-                    ) { page ->
-                        CambiazoImagen(
-                            imagenData = listaFotos[page],
-                            contentDescription = "${prod.nombre} - Foto ${page + 1}",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                } else {
+                val pagerState = rememberPagerState(pageCount = { galeriaImagenes.size.coerceAtLeast(1) })
+
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize()
+                ) { page ->
                     CambiazoImagen(
-                        imagenData = "",
-                        contentDescription = "Sin fotos",
+                        imagenData = galeriaImagenes.getOrNull(page) ?: "",
+                        contentDescription = "${prod.nombre} imagen ${page + 1}",
+                        contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
 
-                // Boton superior izquierdo: Volver
-                Surface(
-                    shape = CircleShape,
-                    color = PureWhiteSurface.copy(alpha = 0.9f),
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(16.dp)
-                        .size(42.dp)
-                        .clickable { onVolver() }
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Volver",
-                            tint = DarkSlateText
-                        )
-                    }
-                }
-
-                // Botones superiores derechos: Compartir y Favorito (RF-12)
+                // Barra flotante superior con Volver, Compartir y Corazón de Favoritos (RF-12)
                 Row(
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
                         shape = CircleShape,
-                        color = PureWhiteSurface.copy(alpha = 0.9f),
-                        modifier = Modifier.size(42.dp)
+                        color = PureWhiteSurface.copy(alpha = 0.92f),
+                        shadowElevation = 4.dp,
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clickable { onVolver() }
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
-                                imageVector = Icons.Default.Share,
-                                contentDescription = "Compartir",
-                                tint = DarkSlateText,
-                                modifier = Modifier.size(20.dp)
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Volver",
+                                tint = DarkSlateText
                             )
                         }
                     }
 
-                    Surface(
-                        shape = CircleShape,
-                        color = PureWhiteSurface.copy(alpha = 0.9f),
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clickable { viewModel.alternarFavorito(prod.id) }
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = if (esFavorito) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                contentDescription = "Favorito",
-                                tint = if (esFavorito) Color(0xFFE74C3C) else DarkSlateText,
-                                modifier = Modifier.size(22.dp)
-                            )
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        // Botón funcional para Compartir el artículo por WhatsApp o redes
+                        Surface(
+                            shape = CircleShape,
+                            color = PureWhiteSurface.copy(alpha = 0.92f),
+                            shadowElevation = 4.dp,
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clickable { compartirArticulo(prod) }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Share,
+                                    contentDescription = "Compartir artículo",
+                                    tint = DarkSlateText,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+
+                        // Botón funcional de Corazón para Guardar/Desmarcar de Favoritos (RF-12)
+                        Surface(
+                            shape = CircleShape,
+                            color = PureWhiteSurface.copy(alpha = 0.92f),
+                            shadowElevation = 4.dp,
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clickable {
+                                    viewModel.alternarFavorito(prod.id)
+                                    val msg = if (!esFavorito) {
+                                        "Agregado a tus favoritos ❤️"
+                                    } else {
+                                        "Eliminado de tus favoritos"
+                                    }
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = if (esFavorito) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                    contentDescription = "Favorito",
+                                    tint = if (esFavorito) Color(0xFFE74C3C) else DarkSlateText,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
                         }
                     }
                 }
 
-                // Contador inferior izquierdo: "1/4" (RF-10)
-                if (listaFotos.isNotEmpty()) {
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = PureWhiteSurface.copy(alpha = 0.92f),
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(16.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PhotoCamera,
-                                contentDescription = null,
-                                tint = DeepGreenBrand,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(5.dp))
-                            Text(
-                                text = "${pagerState.currentPage + 1}/${listaFotos.size}",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = DarkSlateText
-                            )
-                        }
-                    }
-
-                    // Indicadores de puntos (dots) centrados abajo
+                // Indicador de páginas del carrusel si hay más de 1 foto
+                if (galeriaImagenes.size > 1) {
                     Row(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(bottom = 18.dp),
+                            .padding(bottom = 14.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(DarkSlateText.copy(alpha = 0.55f))
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        repeat(listaFotos.size) { index ->
-                            val activo = pagerState.currentPage == index
+                        repeat(galeriaImagenes.size) { idx ->
+                            val activo = pagerState.currentPage == idx
                             Box(
                                 modifier = Modifier
-                                    .size(if (activo) 9.dp else 7.dp)
+                                    .size(if (activo) 8.dp else 6.dp)
                                     .clip(CircleShape)
-                                    .background(
-                                        if (activo) EmeraldPrimary else PureWhiteSurface.copy(alpha = 0.7f)
-                                    )
+                                    .background(if (activo) EmeraldPrimary else Color.White.copy(alpha = 0.6f))
                             )
                         }
                     }
                 }
             }
 
+            // Contenido detallado del artículo
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 18.dp, vertical = 18.dp)
+                    .padding(20.dp)
             ) {
-                // 2. TARJETA DE INFORMACIÓN DEL DUEÑO (RF-10 y RF-11)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = LightGreenTint
+                    ) {
+                        Text(
+                            text = "${prod.categoria} • ${prod.estado}",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = DeepGreenBrand,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        )
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = null,
+                            tint = DeepGreenBrand,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = distanciaTexto,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = DeepGreenBrand
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text(
+                    text = prod.nombre,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = DarkSlateText
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = "Ubicación: ${prod.direccionReferencia}, Cajamarca",
+                    fontSize = 13.sp,
+                    color = MutedText
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // 2. TARJETA DE INFORMACIÓN DEL DUEÑO (RF-11: Toca para abrir su Perfil Público)
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -839,265 +827,139 @@ fun DetalleProductoScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        val ubicacionDueno = listOfNotNull(
-                            propietario?.ciudad?.takeIf { it.isNotBlank() },
-                            propietario?.barrio?.takeIf { it.isNotBlank() }
-                        ).joinToString(" - ").ifEmpty { "Cajamarca Centro" }
-
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(CircleShape)
-                                .background(LightGreenTint)
-                                .border(2.dp, EmeraldPrimary, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (!propietario?.fotoUrl.isNullOrBlank()) {
-                                CambiazoImagen(
-                                    imagenData = propietario?.fotoUrl,
-                                    contentDescription = nombreDueno,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            } else {
-                                Text(
-                                    text = nombreDueno.take(1).uppercase(),
-                                    fontSize = 22.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = DeepGreenBrand
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(14.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = nombreDueno,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = DarkSlateText
-                            )
-
-                            Spacer(modifier = Modifier.height(2.dp))
-
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.EmojiEvents,
-                                    contentDescription = null,
-                                    tint = DeepGreenBrand,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "Swapper Experto",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = DeepGreenBrand
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(4.dp))
-
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "4.9",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = DarkSlateText
-                                )
-                                Icon(
-                                    imageVector = Icons.Default.Star,
-                                    contentDescription = null,
-                                    tint = DeepGreenBrand,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Text(
-                                    text = " (Trueques verificados)",
-                                    fontSize = 12.sp,
-                                    color = MutedText
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(2.dp))
-
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.LocationOn,
-                                    contentDescription = null,
-                                    tint = MutedText,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(
-                                    text = "$ubicacionDueno (a 800m)",
-                                    fontSize = 12.sp,
-                                    color = MutedText
-                                )
-                            }
-                        }
-
-                        IconButton(onClick = {}) {
-                            Icon(
-                                imageVector = Icons.Default.MoreVert,
-                                contentDescription = "Más opciones",
-                                tint = MutedText
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(18.dp))
-
-                // 3. CHIPS DE CATEGORÍA Y ESTADO FÍSICO (RF-10 / RF-20)
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = Color(0xFFE3EFFF)
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            modifier = Modifier.weight(1f)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Category,
-                                contentDescription = null,
-                                tint = DarkSlateText,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = prod.categoria.ifBlank { "General" },
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = DarkSlateText
-                            )
-                        }
-                    }
+                            Box(
+                                modifier = Modifier
+                                    .size(54.dp)
+                                    .clip(CircleShape)
+                                    .background(LightGreenTint)
+                                    .border(2.dp, EmeraldPrimary, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (!propietario?.fotoUrl.isNullOrBlank()) {
+                                    CambiazoImagen(
+                                        imagenData = propietario?.fotoUrl,
+                                        contentDescription = nombreDueno,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    Text(
+                                        text = nombreDueno.take(1).uppercase(),
+                                        fontSize = 22.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = DeepGreenBrand
+                                    )
+                                }
+                            }
 
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = Color(0xFFE3EFFF)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Verified,
-                                contentDescription = null,
-                                tint = DeepGreenBrand,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = prod.estado.ifBlank { "Buen estado" },
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = DarkSlateText
-                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = nombreDueno,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = DarkSlateText
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.Verified,
+                                        contentDescription = "Verificado",
+                                        tint = EmeraldPrimary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Star,
+                                        contentDescription = null,
+                                        tint = EmeraldPrimary,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text(
+                                        text = "%.1f".format(promedioEstrellasDueno),
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = DarkSlateText
+                                    )
+                                    Text(
+                                        text = " ($totalResenasDueno reseñas • Ver perfil)",
+                                        fontSize = 12.sp,
+                                        color = DeepGreenBrand,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
-                // 4. TÍTULO DEL ARTÍCULO
+                // 3. DESCRIPCIÓN DEL ARTÍCULO (RF-10)
                 Text(
-                    text = prod.nombre,
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = DarkSlateText,
-                    lineHeight = 32.sp
+                    text = "Descripción del artículo",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = DarkSlateText
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "Publicado recientemente en tu zona",
-                    fontSize = 12.sp,
-                    color = MutedText
+                    text = prod.descripcion,
+                    fontSize = 14.sp,
+                    color = DarkSlateText.copy(alpha = 0.85f),
+                    lineHeight = 20.sp
                 )
 
                 Spacer(modifier = Modifier.height(18.dp))
+                HorizontalDivider(color = InputBorder)
+                Spacer(modifier = Modifier.height(16.dp))
 
-                // 5. CAJA VERDE: "Lo que busco a cambio" (RF-21)
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    color = LightGreenTint,
-                    border = BorderStroke(1.dp, EmeraldPrimary.copy(alpha = 0.5f))
+                // 4. INTERESES DE CAMBIO DEL DUEÑO (RF-21)
+                Text(
+                    text = "¿Qué busca a cambio?",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = DarkSlateText
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+
+                val listaIntereses = prod.interesesCambio
+                    .split(",")
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .ifEmpty { listOf("Abierto a cualquier propuesta") }
+
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Lightbulb,
-                            contentDescription = null,
-                            tint = Color(0xFFF39C12),
-                            modifier = Modifier.size(26.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
+                    listaIntereses.forEach { interes ->
+                        Surface(
+                            shape = RoundedCornerShape(18.dp),
+                            color = LightGreenTint
+                        ) {
                             Text(
-                                text = "Lo que busco a cambio:",
-                                fontSize = 14.sp,
+                                text = "⇄ $interes",
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = DeepGreenBrand
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = prod.interesesCambio.ifBlank { "Abierto a escuchar ofertas de trueque" },
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = DarkSlateText
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = "* Abierto a escuchar otras ofertas locales.",
-                                fontSize = 12.sp,
-                                fontStyle = FontStyle.Italic,
-                                color = DeepGreenBrand
+                                color = DeepGreenBrand,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                             )
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
-
-                // 6. CARD DE DESCRIPCIÓN COMPLETA (RF-10)
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = PureWhiteSurface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(20.dp)
-                    ) {
-                        Text(
-                            text = "Descripción",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = DarkSlateText
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(
-                            text = prod.descripcion.ifBlank { "Sin descripción adicional." },
-                            fontSize = 15.sp,
-                            color = DarkSlateText.copy(alpha = 0.85f),
-                            lineHeight = 23.sp
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(30.dp))
             }
         }
     }

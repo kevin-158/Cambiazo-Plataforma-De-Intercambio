@@ -96,6 +96,7 @@ import com.example.cambiazoapp.viewmodel.ProductoViewModel
 import com.google.android.gms.location.LocationServices
 import com.google.firebase.auth.FirebaseAuth
 
+//==================Publicar para Trueque (Botón "+" central "Publicar")=================
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PublicarProductoScreen(

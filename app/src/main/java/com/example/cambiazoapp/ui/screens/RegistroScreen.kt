@@ -74,6 +74,7 @@ import com.example.cambiazoapp.ui.theme.OffWhiteBackground
 import com.example.cambiazoapp.ui.theme.PureWhiteSurface
 import com.example.cambiazoapp.viewmodel.UsuarioViewModel
 
+//==================Crear Cuenta / Registro==================
 fun obtenerFortalezaContraseña(contraseña: String): String {
     if (contraseña.isEmpty()) {
         return ""

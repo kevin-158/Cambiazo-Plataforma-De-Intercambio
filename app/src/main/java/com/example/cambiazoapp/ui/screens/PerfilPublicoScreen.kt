@@ -81,6 +81,9 @@ import com.example.cambiazoapp.viewmodel.ProductoViewModel
  * Muestra la reputacion real (promedio de estrellas y reseñas recibidas), nivel en la plataforma
  * y organiza la actividad del dueño en 3 pestañas: Inventario, Historial y Reseñas.
  */
+
+//=======Perfil del Truequeador (Al tocar al dueño de un producto o desde el chat)======
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PerfilPublicoScreen(

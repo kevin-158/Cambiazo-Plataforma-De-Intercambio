@@ -110,6 +110,7 @@ import com.example.cambiazoapp.viewmodel.ProductoViewModel
 import com.google.android.gms.location.LocationServices
 import com.google.firebase.auth.FirebaseAuth
 
+//====================Inicio / Catálogo (Botón "Inicio" y "Buscar" de la barra inferior)==============
 // Pantalla 3: Catálogo principal interactivo con búsqueda, filtros y distancia real en km (RF-07, RF-08, RF-09)
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -201,7 +202,7 @@ fun HomeScreen(
     }
 
     val categoriasFiltro = listOf(
-        "Todos", "Electrónica", "Tecnología", "Libros", "Ropa y accesorios",
+        "Todos", "❤️ Favoritos", "Electrónica", "Tecnología", "Libros", "Ropa y accesorios",
         "Hogar", "Deportes", "Herramientas", "Videojuegos", "Música", "Otros"
     )
 
@@ -223,6 +224,7 @@ fun HomeScreen(
     // Filtrar productos por categoría (RF-07), palabras clave (RF-08), estado y distancia real en km (RF-09)
     val productosFiltrados = remember(
         catalogo,
+        favoritosIds,
         categoriaSeleccionada,
         textoBusqueda,
         estadoFisicoFiltro,
@@ -232,13 +234,17 @@ fun HomeScreen(
         miLongitud
     ) {
         val filtrados = catalogo.filter { producto ->
-            val coincideCategoria = categoriaSeleccionada == "Todos" ||
-                    producto.categoria.equals(categoriaSeleccionada, ignoreCase = true)
-
+            // 1. Filtra por "Todos", "❤️ Favoritos" o la categoría seleccionada
+            val coincideCategoria = when (categoriaSeleccionada) {
+                "Todos" -> true
+                "❤️ Favoritos" -> favoritosIds.contains(producto.id)
+                else -> producto.categoria.equals(categoriaSeleccionada, ignoreCase = true)
+            }
+            // 2. Filtra por estado físico del artículo
             val coincideEstado = estadoFisicoFiltro == "Todos" ||
                     producto.estado.equals(estadoFisicoFiltro, ignoreCase = true) ||
                     producto.estado.contains(estadoFisicoFiltro.substringBefore(" "), ignoreCase = true)
-
+            // 3. Filtra por texto en la barra de búsqueda
             val query = textoBusqueda.trim()
             val coincideBusqueda = query.isEmpty() ||
                     producto.nombre.contains(query, ignoreCase = true) ||
@@ -246,7 +252,7 @@ fun HomeScreen(
                     producto.categoria.contains(query, ignoreCase = true) ||
                     producto.interesesCambio.contains(query, ignoreCase = true) ||
                     producto.direccionReferencia.contains(query, ignoreCase = true)
-
+            // 4. Filtra por distancia máxima en kilómetros
             val distKm = UbicacionUtils.calcularDistanciaKm(
                 miLatitud, miLongitud, producto.latitud, producto.longitud, producto.id
             )
@@ -1092,6 +1098,26 @@ fun TarjetaProductoCatalogo(
                         )
                     }
                 }
+                /*
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Botón explícito en la tarjeta del catálogo que lleva a DetalleProductoScreen
+                Button(
+                    onClick = onClick, // Reutiliza el onClick que ya recibe el producto.id
+                    colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary),
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(vertical = 6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Ver detalle",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+
+                 */
             }
         }
     }

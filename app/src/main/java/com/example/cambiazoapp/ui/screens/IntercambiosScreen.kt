@@ -76,6 +76,9 @@ import com.example.cambiazoapp.ui.theme.PureWhiteSurface
 import com.example.cambiazoapp.viewmodel.IntercambioViewModel
 import com.google.firebase.auth.FirebaseAuth
 
+//======Mis Trueques y Mensajes (Botón "Trueques" de la barra inferior o la campana)=====
+//======Mi Perfil / Mi Inventario (Botón "Perfil" de la barra inferior)======
+
 // Pantalla de Gestión de Propuestas y Mensajes de Trueque (RF-16 y RF-17)
 @Composable
 fun IntercambiosScreen(
@@ -83,6 +86,7 @@ fun IntercambiosScreen(
     onIrAInicio: () -> Unit = onVolver,
     onIrAPublicar: () -> Unit = {},
     onIrAPerfil: () -> Unit = {},
+    //onIrAPantallaNueva: () -> Unit = {},
     onAbrirChatNegociacion: (String) -> Unit = {},
     viewModel: IntercambioViewModel = viewModel()
 ) {
@@ -245,6 +249,34 @@ fun IntercambiosScreen(
                     }
                 )
             }
+            /*
+            //=============================
+            Button(
+                onClick = onIrAPantallaNueva,
+                colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp, vertical = 8.dp)
+            ) {
+                Text("Ver Consejos de Seguridad", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+
+             */
+            // Botón para ir a Publicar (ya está conectado con onIrAPublicar)
+            /*
+            Button(
+                onClick = onIrAPublicar, // O usa onIrAInicio / onIrAPerfil según lo que te pida
+                colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp, vertical = 8.dp)
+            ) {
+                Text("Ir a Publicar Artículo", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+
+             */
 
             if (cargando) {
                 Box(
